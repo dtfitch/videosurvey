@@ -1,7 +1,7 @@
 # videosurvey
 Analysis of bicycling comfort from a video survey
 
-# Jane's Notes
+### Jane's Notes
 
 - Preliminary linear model (lm.prelim) seems reasonable now, though I think there's still some conflation with divided road and other street features to explain it's large positive coef.
 

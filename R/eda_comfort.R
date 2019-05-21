@@ -2,11 +2,13 @@
 # Jane Carlen, May 2019
 
 # Videos generally have a positive or negative comfort rating, not many with rating evenly spread or concentrated on middle rating
+
 # Questions:
 #   What explains the tails in the ratings, i.e. people who deviate from the general trend
 #   Do people have low-rating and high-rating tendencies, and are they explained by covariates?
 #   I notice all score distributions are more bimodal than normal (bumps for high and low), and individual qualities seem to flatten out the distribution rather than moving the mean.
-# 0. Setup 
+
+# 0. Setup ----
 
 library(ggplot2)
 library(ggridges)
@@ -14,46 +16,10 @@ library(dplyr)
 library(forcats)
 library(reshape2)
 
-setwd("~/Documents/bike_its/")
+setwd("~/Documents/videosurvey/")
 
-# 0b. Helper functions
-
-condense_ratings = function(x, levels) {
-  if (x %in% floor(1:(levels/2) ) ) return("uncomfortable")
-  else if (x %in% (levels+1)/2) return("neither")
-  else if (x %in% ceiling((levels+2)/2):levels) return("comfortable")
-  else return(NA)
-}
-
-# 1. Load Data
-
-d <- readRDS("video_survey_data_long.RDS")
-d.meta <- read.csv("Metadata_video_survey_data_long.csv")
-
-# make street variables clear from names so easy to select
-names(d)[(which(names(d) == "video_name")+1):ncol(d)] = paste0(names(d)[(which(names(d) == "video_name")+1):ncol(d)], "_ST")
-
-# how many levels in each of the street vars?
-sapply(d %>% select(c("comfort_rating", "video_name", contains("_ST", ignore.case = FALSE))) %>%
-        mutate_at(vars(contains("_ST")), as.factor), nlevels)
-
-
-summary(d)
-
-d <- d %>% mutate(op_like_biking3 = as.factor(unlist(sapply(as.numeric(op_like_biking), condense_ratings, levels = 5)))  )
-
-d.video = d %>% group_by(video_name) %>% summarize(
-  mean_comfort = mean(as.numeric(comfort_rating), na.rm = T),
-  median_comfort = median(as.numeric(comfort_rating), na.rm = T),
-  speed = first(bike_speed_mph_ST),
-  NCHRP_BLOS_score = first(NCHRP_BLOS_score_ST)
-  )
-
-d.video.melt = d %>% select(c("comfort_rating", "video_name", contains("_ST", ignore.case = FALSE))) %>%
-                  mutate_if(is.factor, list(as.numeric)) %>%
-                  melt(id = c("video_name", "comfort_rating")) %>%
-                  group_by(value, variable, comfort_rating) %>%
-                  summarize(count = n())
+# load data
+source("R/data_comfort.R")
 
 # 2. Explore video ratings distributions ----
 
@@ -69,6 +35,10 @@ ggplot(d %>% group_by(video_name) %>% mutate(mean_cr = mean(as.numeric(comfort_r
   stat_density_ridges(geom = "density_ridges_gradient", bandwidth = .5) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
+# Which videos have wide variation? (4th_AddisonUniversity, Tunnel_OakRidgeUplands, Ashby_ColbyRegent)
+d$video_name = relevel(d$video_name, ref = "4th_AddisonUniversity")
+summary(lm(as.numeric(d$comfort_rating) ~ video_name, data = d)) #R^2 .2039
+
 #Video rating distribution by video and gender
 ggplot(d %>% group_by(video_name) %>% mutate(mean_cr = mean(as.numeric(comfort_rating), na.rm  = T)), 
        aes(x = comfort_rating, y = fct_reorder(interaction(female, video_name), mean_cr), 
@@ -79,12 +49,43 @@ ggplot(d %>% group_by(video_name) %>% mutate(mean_cr = mean(as.numeric(comfort_r
 #Video rating distribution by video and "op_like_biking" (3 levels)
 ggplot(d %>% group_by(video_name) %>% 
          mutate(mean_cr = mean(as.numeric(comfort_rating), na.rm  = T)) %>%
-         filter(op_like_biking3 != "neither" & !is.na(op_like_biking3)), 
-       aes(x = comfort_rating, y = fct_reorder(interaction(op_like_biking3, video_name), mean_cr), 
-           group = interaction(op_like_biking3, video_name), fill = as.factor(op_like_biking3))) +
+         filter(op_like_biking_3lev != "neither" & !is.na(op_like_biking_3lev)), 
+       aes(x = comfort_rating, y = fct_reorder(interaction(op_like_biking_3lev, video_name), mean_cr), 
+           group = interaction(op_like_biking_3lev, video_name), fill = as.factor(op_like_biking_3lev))) +
   stat_density_ridges(geom = "density_ridges_gradient", bandwidth = .5) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
   scale_fill_manual(values = c("limegreen", "red2"), labels= c("like", "dont_like"))
+
+#Video rating distribution by video and "usual_mode =="Bike " (3 levels)
+ggplot(d %>% group_by(video_name) %>% 
+         mutate(mean_cr = mean(as.numeric(comfort_rating), na.rm  = T)) %>%
+         filter(!is.na(usual_mode)), 
+       aes(x = comfort_rating, y = fct_reorder(interaction(usual_mode=="Bus", video_name), mean_cr), 
+           group = interaction(usual_mode=="Bus", video_name), fill = as.factor(usual_mode=="Bus"))) +
+  stat_density_ridges(geom = "density_ridges_gradient", bandwidth = .5) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_fill_manual(values = c("limegreen", "red2"), labels= c("false", "true"))
+
+# Does liking biking imply a shift, or multiplicative?
+d %>% group_by(video_name, op_like_biking_3lev) %>% summarize(m = mean(as.numeric(comfort_rating), na.rm = T)) %>%
+  ggplot() + 
+  geom_path(aes(x = video_name, y = m, color = op_like_biking_3lev, group = video_name))  +
+  geom_point(aes(x = video_name, y = m, color = op_like_biking_3lev), size = 5) +
+  scale_color_manual(values = c("red", "green")) + coord_flip()
+
+# Does liking biking imply a shift, or multiplicative?
+d %>% group_by(video_name, female) %>% summarize(m = mean(as.numeric(comfort_rating), na.rm = T)) %>%
+  ggplot() + 
+  geom_path(aes(x = video_name, y = m, color = as.factor(female), group = video_name))  +
+  geom_point(aes(x = video_name, y = m, color = as.factor(female)), size = 5) +
+  scale_color_manual(values = c("red", "green")) + coord_flip()
+
+# Does liking biking imply a shift, or multiplicative?
+d %>% group_by(bike_lane_ST, op_like_biking_3lev) %>% summarize(m = mean(as.numeric(comfort_rating), na.rm = T)) %>%
+  ggplot() + 
+  geom_path(aes(x = bike_lane_ST, y = m, color = as.factor(op_like_biking_3lev), group = bike_lane_ST))  +
+  geom_point(aes(x = bike_lane_ST, y = m, color = as.factor(op_like_biking_3lev)), size = 5) +
+  scale_color_manual(values = c("red", "green")) + coord_flip()
 
 # ratings distributions
 ggplot(d) + geom_histogram(aes(x = comfort_rating), stat = "count")
@@ -102,11 +103,11 @@ ggplot(d.video.melt, aes(x = reorder(as.factor(value), sort(value)), y = count, 
   theme_minimal()
 
   # Condensed ratings to uncomfortable, comfortable
-  d.video.melt3 = d.video.melt %>% mutate(comfort_rating3 = as.factor(sapply(comfort_rating, condense_ratings, levels = 7))) %>%
-    filter(comfort_rating3 != "neither" & !is.na(comfort_rating3)) %>%
-    group_by(comfort_rating3, variable, value) %>% summarize(count = sum(count))
+  d.video.melt3 = d.video.melt %>% mutate(comfort_rating_3lev = as.factor(sapply(comfort_rating, condense_ratings, levels = 7))) %>%
+    filter(comfort_rating_3lev != "neither" & !is.na(comfort_rating_3lev)) %>%
+    group_by(comfort_rating_3lev, variable, value) %>% summarize(count = sum(count))
 
-  ggplot(d.video.melt3 %>% group_by(variable), aes(x = reorder(as.factor(value), rank(value)), y = count, fill = as.factor(comfort_rating3))) +
+  ggplot(d.video.melt3 %>% group_by(variable), aes(x = reorder(as.factor(value), rank(value)), y = count, fill = as.factor(comfort_rating_3lev))) +
     scale_fill_manual(values = c("limegreen", "red2")) + 
     geom_bar(stat = "identity", position = "dodge") +
     facet_wrap(~variable, scales = "free") +

@@ -6,7 +6,7 @@
 # Data questions for Dillon;
 # 1. Why so many blank entries in the child fields? Why a few "Nones" in addition to zeros? (free-entry fields?)
 # 2. Coding of hh_composition? Conflicting levels selected. Using rent_share as a hh composition type variable because it has least missing data nad is still somewhat discriptive of household type
-
+# 3. Are blocked bike lanes really blocked? (https://youtu.be/LI0m8h3jVJ4, https://youtu.be/XAKiJ78Z8uE)
 
 # 0. Setup ----
 
@@ -52,7 +52,7 @@ sapply(d %>% select(c("comfort_rating", "video_name", contains("_ST", ignore.cas
          mutate_at(vars(contains("_ST")), as.factor), nlevels)
 
 
-summary(d)
+#   Summary data sets ----
 
 d.video = d %>% group_by(video_name) %>% summarize(
   mean_comfort = mean(as.numeric(comfort_rating), na.rm = T),

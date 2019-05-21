@@ -3,8 +3,9 @@ Analysis of bicycling comfort from a video survey
 
 ### Jane's Notes
 
-- Preliminary linear model (lm.prelim) seems reasonable now, though I think there's still some conflation with divided road and other street features to explain it's large positive coef.
-- Street features basically provide as much information as street id. (This may be because the features essentially reconstruct the names, though the signs of the coefficients make sense so probably not.) But we find that there is a lot of variation in street ratings in general. 
+- Modeling notes 
+  - Preliminary linear model (lm.prelim) seems reasonable now, though I think there's still some conflation with divided road and other street features to explain it's large positive coef.
+  - Street features basically provide as much information as street id. (This may be because the features essentially reconstruct the names, though the signs of the coefficients make sense so probably not.) But we find that there is a lot of variation in street ratings in general. 
 
 - Data questions
   - 1. Why so many blank entries in the child fields? Why a few "Nones" in addition to zeros? (free-entry fields?)

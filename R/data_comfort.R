@@ -3,9 +3,6 @@
 # and model_comfort.R for modeling
 # Jane Carlen, May 2019
 
-# Notes
-# in 3lev variables, the levels are negative (anything strong to moderate disagreement), NA (neutral), and positive (mild to strong agreement)
-
 # Data questions for Dillon;
 # 1. Why so many blank entries in the child fields? Why a few "Nones" in addition to zeros? (free-entry fields?)
 # 2. Coding of hh_composition? Conflicting levels selected. Using rent_share as a hh composition type variable because it has least missing data nad is still somewhat discriptive of household type
@@ -26,7 +23,7 @@ setwd("~/Documents/videosurvey/")
 
 condense_ratings = function(x, levels) {
   if (x %in% floor(1:(levels/2) ) ) return("negative")
-  else if (x %in% (levels+1)/2) return("neither")
+  else if (x %in% ((levels+1)/2)) return("neutral")
   else if (x %in% ceiling((levels+2)/2):levels) return("positive")
   else return(NA)
 }
@@ -46,9 +43,9 @@ d <- d %>% select(-street_divided_ST)
 #   Add some 3-level vars ----
 d <- d %>% 
   mutate(op_like_biking_3lev = factor(unlist(sapply(as.numeric(op_like_biking), condense_ratings, levels = 5)), 
-                                      levels = c("negative", "positive"), ordered = TRUE)) %>%
+                                      levels = c("negative", "neutral", "positive"), ordered = TRUE)) %>%
   mutate(comfort_rating_3lev = as.ordered( 
-    factor( sapply(as.numeric(comfort_rating), condense_ratings, levels = 7) , levels = c("negative", "positive") )
+    factor( sapply(as.numeric(comfort_rating), condense_ratings, levels = 7) , levels = c("negative", "neutral", "positive") )
   ))
 
 # how many levels in each of the street vars?
@@ -102,3 +99,4 @@ d %>% group_by(video_name) %>% summarize(first(URL))
 # videos with wider variation in seem to have a mix of good and bad features,
 # e.g. slower residential street but no bike lane, faster street with shoulder/bike lane
 # wider, slower street with no bike lane
+

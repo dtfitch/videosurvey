@@ -9,8 +9,7 @@
 # Questions:
 #   What explains the tails in the ratings, i.e. people who deviate from the general trend?
 #   Do people have low-rating and high-rating tendencies, and are they explained by covariates?
-.
-
+#----------------------------------------------------------------------------------------------
 # 0. Setup ----
 
 library(ggplot2)
@@ -65,7 +64,7 @@ ggsave("IMG/ratings_video_gender_dists.png", width = 6, height = 12)
 #Video rating distribution by video and "op_like_biking" (3 levels)
 ggplot(d %>% group_by(video_name) %>% 
          mutate(mean_cr = mean(as.numeric(comfort_rating), na.rm  = T)) %>%
-         filter(op_like_biking_3lev != "neither" & !is.na(op_like_biking_3lev)), 
+         filter(op_like_biking_3lev != "neutral" & !is.na(op_like_biking_3lev)), 
        aes(x = comfort_rating, y = fct_reorder(interaction(as.numeric(op_like_biking_3lev)-1, video_name), mean_cr), 
            group = interaction(as.numeric(op_like_biking_3lev), video_name), fill = as.factor(op_like_biking_3lev))) +
   stat_density_ridges(geom = "density_ridges_gradient", bandwidth = .5) +
@@ -82,6 +81,7 @@ ggplot(d %>% group_by(video_name) %>%
            group = interaction(usual_mode=="Bike", video_name), fill = as.factor(usual_mode=="Bike"))) +
   stat_density_ridges(geom = "density_ridges_gradient", bandwidth = .5) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  xlab("") + ylab("") +
   scale_fill_manual(values = rainbow(2,  alpha = .7), labels= c("False", "True"))
 
 # 3. Explore independent variables  ----
@@ -114,11 +114,11 @@ ggsave("IMG/ratings_by_variable.png", width = 18, height = 9)
 
 # Condensed ratings to negative, positive
 d.video.melt3 = d.video.melt %>% mutate(comfort_rating_3lev = as.factor(sapply(as.numeric(comfort_rating), condense_ratings, levels = 7))) %>%
-  filter(comfort_rating_3lev != "neither" & !is.na(comfort_rating_3lev)) %>%
+  filter(comfort_rating_3lev != "neutral" & !is.na(comfort_rating_3lev)) %>%
   group_by(comfort_rating_3lev, variable, value) %>% summarize(count = sum(count))
 
 ggplot(d.video.melt3 %>% group_by(variable), aes(x = reorder(as.factor(value), rank(value)), y = count, fill = as.factor(comfort_rating_3lev))) +
-  scale_fill_manual(values = rainbow(2, alpha = .7)) + 
+  scale_fill_manual(values = rainbow(3, alpha = .7)) + 
   geom_bar(stat = "identity", position = "dodge", color = "black", lwd = .2) +
   facet_wrap(~variable, scales = "free") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
@@ -132,6 +132,7 @@ ggsave("IMG/ratings_binary_by_variable.png", width = 18, height = 9)
 # Does liking biking imply a shift, or multiplicative?
 d %>% group_by(video_name, op_like_biking_3lev) %>%
   summarize(m = mean(as.numeric(comfort_rating), na.rm = T)) %>%
+  filter(op_like_biking_3lev!="neutral") %>%
   ggplot() + 
   geom_path(aes(x = fct_reorder(video_name, m), y = m, color = op_like_biking_3lev, group = video_name))  +
   geom_point(aes(x = fct_reorder(video_name, m), y = m, color = op_like_biking_3lev), size = 5) +
@@ -145,7 +146,9 @@ d %>% group_by(video_name, female) %>% summarize(m = mean(as.numeric(comfort_rat
   scale_color_manual(values = c("red", "green")) + coord_flip()
 
 # Does bike line have an interaction effect with liking biking? (Seems not)
-d %>% group_by(bike_lane_ST, op_like_biking_3lev) %>% summarize(m = mean(as.numeric(comfort_rating), na.rm = T)) %>%
+d %>% group_by(bike_lane_ST, op_like_biking_3lev) %>% 
+  summarize(m = mean(as.numeric(comfort_rating), na.rm = T)) %>%
+  filter(op_like_biking_3lev!="neutral") %>%
   ggplot() + 
   geom_path(aes(x = bike_lane_ST, y = m, color = as.factor(op_like_biking_3lev), group = bike_lane_ST))  +
   geom_point(aes(x = bike_lane_ST, y = m, color = as.factor(op_like_biking_3lev)), size = 5) +

@@ -226,7 +226,7 @@ names(d.model)
 lm.video_name = lm(as.numeric(comfort_rating) ~ video_name, data = d)
 summary(lm.video_name)
 
-# Model from features (8 fewer variables than above, only .0.018 loss in R-squared, and coef make sense)
+# Model from features (8 fewer variables than above, only 2% loss in R-squared, and coef make sense)
 d.model.street = d %>% select(matches("(ST|comfort_rating)", ignore.case = FALSE)) %>%
   #remove some vars strongly correlated with others
   select(-c("veh_volume_ST", "comfort_rating_3lev","NCHRP_BLOS_score_ST", #lower score -> A
@@ -234,9 +234,9 @@ d.model.street = d %>% select(matches("(ST|comfort_rating)", ignore.case = FALSE
             "bike_lane_and_parking_lane_width_ft_ST",
             #"shoulder_width_ft_ST",
             #"speed_limit_mph_ST",
-            "HCM_BLOS_ST",
+            "HCM_BLOS_ST", "LTS_ST", 
             "bikeway_width_ft_ST",
-            "urban_ST", "LTS_ST", 
+            "urban_ST", 
             "protected_ST", "buffer_ST", "bike_lane_blocked_ST", "bike_lane_SUM_ST")) 
 
 lm.street = lm(as.numeric(comfort_rating) ~ ., data = d.model.street)
@@ -291,7 +291,7 @@ d$person_ID[c(which.max(abs(lm.video_name$residuals)), which.max(abs(lm.street$r
 #View(d %>% mutate(x = as.numeric(comfort_rating)) %>% group_by(person_ID) %>%
 #            mutate(y = max(x) - min(x)) %>% filter(y == 0) %>% arrange(person_ID))
 
-# ---- Notes ----------------------------------------------------------------------
+# ------------------------------ 4. Scrtach -----------------------------------------
 #     Ordered logit with person random effect? ####
 
 library("ordinal")
@@ -299,9 +299,10 @@ library("ordinal")
 d.model.randord =  d.model %>% select(-"comfort_rating") %>% mutate(person_ID = as.factor(d$person_ID))
 names(d.model.randord)
 
-randord.prelim = clmm2(comfort_rating_ordered ~ ., random=person_ID, data = d.model.randord)
+# randord.prelim = clmm2(comfort_rating_ordered ~ ., random=person_ID, data = d.model.randord)
 
 # doesn't work:
+# (and attempt with binary response got same error)
 # randord.prelim = clmm2(comfort_rating_ordered ~ ., random=person_ID, data = d.model.randord)
 # Error in setStart(rho) : attempt to find suitable starting values failed
 #In addition: Warning messages:
@@ -309,11 +310,27 @@ randord.prelim = clmm2(comfort_rating_ordered ~ ., random=person_ID, data = d.mo
 #2: glm.fit: fitted probabilities numerically 0 or 1 occurred 
 
 
-#     binary outcome notes ----
+#     Decision tree ----
 
-lm.binary.1 = glm(as.numeric(comfort_rating_3lev)-1 ~ .,
+library(rpart)
+library(rpart.plot)
+#Set response type
+mf3 = model.frame( comfort_rating_3lev ~ ., 
+                  data = d.model %>% select(-c("comfort_rating", "comfort_rating_ordered")) %>% 
+                   mutate(comfort_rating_3lev = d$comfort_rating_3lev) )
+
+tree.prelim = rpart(mf3, control = rpart.control(minsplit = 5, minbucket = 2, cp = .001),
+                    model = TRUE, method = "class")
+
+rpart.plot(tree.prelim, digits = 1, cex = .6, type = 3)
+
+#     binary outcome ----
+
+# Use comfort_rating_3lev and remove neutrals
+lm.binary.1 = glm(as.numeric(comfort_rating_3lev) - 1 ~ .,
                   data = d.model %>% mutate(comfort_rating_3lev = d$comfort_rating_3lev) %>% 
-                    select(-c("comfort_rating", "comfort_rating_ordered")), family = "binomial")
+                    select(-c("comfort_rating", "comfort_rating_ordered")) %>%
+                    filter(comfort_rating_3lev !="neutral") %>% droplevels, family = "binomial")
 
 summary(lm.binary.1)
 

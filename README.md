@@ -8,8 +8,7 @@ Analysis of bicycling comfort from a video survey
   - Street features basically provide as much information as street id. (This may be because the features essentially reconstruct the names, though the signs of the coefficients make sense so probably not.) 
   - There is a lot of variation in street ratings in general. 
     - Rating distributions are more bimodal (bumps for high and low) than normal, and certain qualities (e.g. don't like biking) seem to flatten out the distribution rather than just moving the mean
-    - What explains the tails in the ratings i.e. people who deviate from the general trend? 
-    - Do people have low-rating and high-rating tendencies, and are they explained by covariates? Random effects?
+    - What explains the tails in the ratings i.e. people who deviate from the general trend? Do people have low-rating and high-rating tendencies (random effects?), and/or are they explained by covariates?
     - Strategy for responders who rated all videos the same, even when shown "between" blocks. (Consider as outliers? Add random effects? Seperate random effects for between and within blocks?)
   
 

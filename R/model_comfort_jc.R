@@ -114,42 +114,6 @@ cbind(rownames(street.cor)[round(apply(street.cor, 1, which.max), 2)],
 d$bike_access = as.factor(d$bike_access)
 names(d)[sapply(d, is.factor)]
 
-#   Convert some factors to ordered ----
-
-# List unordered factors
-names(d)[sapply(d, is.factor) & !sapply(d, is.ordered)]
-
-d$rent_share = ordered(d$rent_share, levels = levels(d$rent_share)[c(1,4,2,3)])
-levels(d$rent_share)[1] = NA
-
-d$HCM_BLOS_ST = ordered(d$HCM_BLOS_ST, levels = rev(levels(d$HCM_BLOS_ST))) #Ordered alphabetically, best is A
-
-d$veh_volume_ST = ordered(d$veh_volume_ST, levels = rev(levels(d$veh_volume_ST))) 
-
-d$veh_volume2_ST = ordered(d$veh_volume2_ST, levels = rev(levels(d$veh_volume2_ST))) 
-
-# Alot of missing data in these fields
-levels(d$child1617) = c(NA,0,1,2,0)
-levels(d$child6) = c(NA,0,1,2,3,0)
-levels(d$child615) = c(NA,0,1,2,3,4,0)
-table(as.numeric(as.character(d$child1617)), useNA = "always")
-
-d$child6 = as.numeric(as.character(d$child6))
-d$child615 = as.numeric(as.character(d$child615))
-d$child1617 = as.numeric(as.character(d$child1617))
-
-#   Replace "" with NA ----
-sort(colSums(apply(d, 2, "==", ""), na.rm = T))
-levels(d$rent_split)[1] = NA
-levels(d$housing_unit_type)[1]=NA
-levels(d$hh18_older)[1]=NA
-levels(d$hh_composition)[1]=NA
-levels(d$edu_self)[1]=NA
-levels(d$edu_parent)[1]=NA
-levels(d$license)[1]=NA
-levels(d$secondary_mode)[1]=NA
-levels(d$usual_mode)[1]=NA
-
 #   Reduce factors for some variables ----
 
 d$usual_mode_4lev = d$usual_mode
@@ -158,6 +122,16 @@ levels(d$usual_mode_4lev) = c("Bike", "Public Trans", "Car", "Car", "Bike", "Car
 
 d$secondary_mode_BIKE = d$secondary_mode
 levels(d$secondary_mode_BIKE) = c("Bike", "Not_Bike", "Not_Bike", "Not_Bike", "Bike", "Not_Bike", "Not_Bike", "Not_Bike", "Not_Bike", "Not_Bike")
+
+# May want to reduce child fields to binary, but note alot of missing data in these fields
+levels(d$child1617) = c(NA,0,1,2,0)
+levels(d$child6) = c(NA,0,1,2,3,0)
+levels(d$child615) = c(NA,0,1,2,3,4,0)
+table(as.numeric(as.character(d$child1617)), useNA = "always")
+
+d$child6 = as.numeric(as.character(d$child6))
+d$child615 = as.numeric(as.character(d$child615))
+d$child1617 = as.numeric(as.character(d$child1617))
 
 # [1] "Bike"                                                                               
 # [2] "Bus"                                                                                
@@ -205,7 +179,8 @@ d.model = d %>% select(-c("cts_ID", "ID", "URL",
   select(-c("bike_lane_blocked_ST")) %>%
   # Removed in favor of other version or similar var
   select(-contains("_3lev", ignore.case = FALSE)) %>%
-  select(-c("monthly_housing_cost", "veh_volume_ST", "NCHRP_BLOS_ST", "HCM_BLOS_ST",
+  select(-c("monthly_housing_cost", "veh_volume_ST", #<- used veh_volume2_ST instead, more precise
+            "NCHRP_BLOS_ST", "HCM_BLOS_ST",
             "usual_mode", "prevailing_speed_mph_ST", #<- used prevail - speed instead to reduce correlation
             #in bike_lane_SUM_ST
             "bike_lane_ST", "protected_ST", "buffer_ST", 
@@ -284,10 +259,14 @@ summary(ord.prelim)
 
 glmcr.prelim = glmnetcr(x = model.matrix(ord.prelim)[,-1], y = model.frame(ord.prelim)$comfort_rating_ordered)
 names(glmcr.prelim)
+png("IMG/penalized_ordered_coef_path.png", width = 1600, height = 1000)
 par(mai  = c(2,2,2,2))
-plot.glmnetcr(glmcr.prelim) # I manually added a cex.axis arg
+plot.glmnetcr(glmcr.prelim) # I manually added a cex.axis = .5 arg
+dev.off()
 nonzero.glmnetcr(glmcr.prelim, s = 20)
 sort(nonzero.glmnetcr(glmcr.prelim, s = 21)$beta[1:16])
+
+#Note how buffered bike lane and bike lane and parking lenght width trade off
 
 #     Look at outliers ####
 
@@ -312,12 +291,15 @@ d$person_ID[c(which.max(abs(lm.video_name$residuals)), which.max(abs(lm.street$r
 #View(d %>% mutate(x = as.numeric(comfort_rating)) %>% group_by(person_ID) %>%
 #            mutate(y = max(x) - min(x)) %>% filter(y == 0) %>% arrange(person_ID))
 
-# ---- Notes ---------------------------------------------------------------------------------------------------------------------------
+# ---- Notes ----------------------------------------------------------------------
 #     Ordered logit with person random effect? ####
 
 library("ordinal")
 
 d.model.randord =  d.model %>% select(-"comfort_rating") %>% mutate(person_ID = as.factor(d$person_ID))
+names(d.model.randord)
+
+randord.prelim = clmm2(comfort_rating_ordered ~ ., random=person_ID, data = d.model.randord)
 
 # doesn't work:
 # randord.prelim = clmm2(comfort_rating_ordered ~ ., random=person_ID, data = d.model.randord)

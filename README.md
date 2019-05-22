@@ -16,7 +16,6 @@ Analysis of bicycling comfort from a video survey
   - 1. Why so many blank entries in the child fields? Why a few "Nones" in addition to zeros? (free-entry fields?)
   - 2. Coding of hh_composition? Conflicting levels selected. (Used rent_share as a hh composition type variable because it has least missing data nad is still somewhat discriptive of household type.)
   - 3. Are blocked bike lanes really blocked? (https://youtu.be/LI0m8h3jVJ4, https://youtu.be/XAKiJ78Z8uE)
-  - 4. Used veh_volume2_ST, more precise than veh_volume_ST.
   
 
   

@@ -5,7 +5,7 @@ Analysis of bicycling comfort from a video survey
 
 - Modeling notes 
   - Preliminary linear model (lm.prelim) seems reasonable now, though I think there's still some conflation with divided road and other street features to explain its large positive coef. (Note the divided road coef. fades away in a penalized model.)
-  - Preliminary ordered (ord.prelim) and penalized ordered (glmcr.prelim) also seem reasonable.
+  - Preliminary ordered model (ord.prelim) and penalized ordered model (glmcr.prelim) also seem reasonable.
   - Street features basically provide as much information as street id. (This may be because the features essentially reconstruct the names, though the signs of the coefficients make sense so probably not.) 
   - There is a lot of variation in street ratings in general. 
     - Rating distributions are more bimodal (bumps for high and low) than normal, and certain qualities (e.g. don't like biking) seem to flatten out the distribution rather than just moving the mean

@@ -1,6 +1,10 @@
 # Models of bike comfort data
 # Jane Carlen, May 2019
 #
+# To do:
+# - random effects in ordered logit
+# - decision trees to explore interaction effects
+#
 # Levels: L, Q, C, 4 ??
 #
 # -----------------------------------------------------------------------------------
@@ -9,6 +13,7 @@
 library(MASS)
 try({detach("package:dplyr")})
 library(dplyr) # to use dplyr select
+library("glmnetcr")
 
 setwd("~/Documents/videosurvey")
 source("R/data_comfort.R")
@@ -200,21 +205,22 @@ d.model = d %>% select(-c("cts_ID", "ID", "URL",
   select(-c("bike_lane_blocked_ST")) %>%
   # Removed in favor of other version or similar var
   select(-contains("_3lev", ignore.case = FALSE)) %>%
-    # prevailing speed very similar to speed_limit
   select(-c("monthly_housing_cost", "veh_volume_ST", "NCHRP_BLOS_ST", "HCM_BLOS_ST",
-            "usual_mode", "prevailing_speed_mph_ST",
+            "usual_mode", "prevailing_speed_mph_ST", #<- used prevail - speed instead to reduce correlation
             #in bike_lane_SUM_ST
-            "bike_lane_ST", "protected_ST", "buffer_ST")) %>%
+            "bike_lane_ST", "protected_ST", "buffer_ST", 
+            # tried just secondary mode is BIKE instead
+            "secondary_mode")) %>%
+  #removecomposite street vars while examining street factors
+  select(-c("NCHRP_BLOS_score_ST", "LTS_ST")) %>%
   # Summed variables describing liking commute instead
   select(-contains("commute", ignore.case = F)) %>%
   # Too many levels (may add vack in later)
   # Reduce levels of seconary mode?
   # Reduce levels of child vars to just have or don't have kid? (lots of missing data tho)
-  select(-c("secondary_mode", "child6", "child615", "child1617")) %>%
+  select(-c("child6", "child615", "child1617")) %>%
   # unlikely relationship (may add back in later)
   select(-c("distance", "op_smartphone", "license")) %>%
-  #removecomposite street vars while examining street factors
-  select(-c("NCHRP_BLOS_score_ST", "LTS_ST")) %>%
   # removed after preliminary models and no strong reason to keep them (may add vack in later)
   select(-c(#"divided_road_ST",
             "op_eco_concern", "bike_access", "op_travel_wasted", "op_like_driving",
@@ -224,7 +230,8 @@ d.model = d %>% select(-c("cts_ID", "ID", "URL",
             "rent_share",
             "urban_ST",
             #strongly correlated with bike_lane_SUM_ST:
-            "bikeway_width_ft_ST" )) %>%
+            "shoulder_width_ft_ST", #removing this instead of "bike_lane_and_parking_lane_width_ft_ST" makes bike_lane_SUM_ST1 more sensical
+            "bikeway_width_ft_ST")) %>%
   # make orderd vars numeric to reduce variables in model (can revert or re-bin if very non-linear)
   mutate_if(is.ordered, as.numeric) %>%
   mutate(comfort_rating_ordered = d$comfort_rating) #Outcome as a factor
@@ -250,6 +257,7 @@ d.model.street = d %>% select(matches("(ST|comfort_rating)", ignore.case = FALSE
   select(-c("veh_volume_ST", "comfort_rating_3lev","NCHRP_BLOS_score_ST", #lower score -> A
             "prevailing_speed_mph_ST",
             "bike_lane_and_parking_lane_width_ft_ST",
+            #"shoulder_width_ft_ST",
             #"speed_limit_mph_ST",
             "HCM_BLOS_ST",
             "bikeway_width_ft_ST",
@@ -269,8 +277,17 @@ summary(lm.prelim)
 
 # Ordered response (OK)
 d.model.ord =  d.model %>% select(-"comfort_rating")
-ord.prelim = polr(comfort_rating_ordered ~ ., data = d.model.ord)
+ord.prelim = polr(comfort_rating_ordered ~ ., data = d.model.ord, Hess = TRUE)
 summary(ord.prelim)
+
+#     Penalized models (GLMNET, lasso) ----
+
+glmcr.prelim = glmnetcr(x = model.matrix(ord.prelim)[,-1], y = model.frame(ord.prelim)$comfort_rating_ordered)
+names(glmcr.prelim)
+par(mai  = c(2,2,2,2))
+plot.glmnetcr(glmcr.prelim) # I manually added a cex.axis arg
+nonzero.glmnetcr(glmcr.prelim, s = 20)
+sort(nonzero.glmnetcr(glmcr.prelim, s = 21)$beta[1:16])
 
 #     Look at outliers ####
 
@@ -278,11 +295,14 @@ summary(ord.prelim)
 
 head(sort(lm.video_name$residuals), 30)
 tail(sort(lm.video_name$residuals), 30) 
+head(sort(lm.street$residuals), 30)
+tail(sort(lm.street$residuals), 30) 
 
 which.max(abs(lm.video_name$residuals)) #14705
-which.max(abs(lm.street$residuals)) #14705 - person ID 140
 filter(d, person_ID == d$person_ID[14705]) #Ranked all video "very uncomforable", even though black was between and NCHRP scores were two E's and two A's
-filter(d, person_ID == d$person_ID[14760])
+which.max(abs(lm.street$residuals)) #10087
+d$person_ID[c(which.max(abs(lm.video_name$residuals)), which.max(abs(lm.street$residuals))) ] #140, 140
+
 
 # Look at entries where respondant had no variance but group was "Between" 
 #View(d %>% mutate(x = as.numeric(comfort_rating)) %>% group_by(person_ID) %>% 
@@ -292,18 +312,22 @@ filter(d, person_ID == d$person_ID[14760])
 #View(d %>% mutate(x = as.numeric(comfort_rating)) %>% group_by(person_ID) %>%
 #            mutate(y = max(x) - min(x)) %>% filter(y == 0) %>% arrange(person_ID))
 
+# ---- Notes ---------------------------------------------------------------------------------------------------------------------------
 #     Ordered logit with person random effect? ####
 
-#     GLMNET models (lasso) ----
+library("ordinal")
 
-library(glmnet)
+d.model.randord =  d.model %>% select(-"comfort_rating") %>% mutate(person_ID = as.factor(d$person_ID))
 
-glmnet1 = glmnet(model.matrix(glm1), glm1$y)
-plot(glmnet1, label = TRUE)
-View(glmnet1$beta)
+# doesn't work:
+# randord.prelim = clmm2(comfort_rating_ordered ~ ., random=person_ID, data = d.model.randord)
+# Error in setStart(rho) : attempt to find suitable starting values failed
+#In addition: Warning messages:
+#  1: glm.fit: algorithm did not converge 
+#2: glm.fit: fitted probabilities numerically 0 or 1 occurred 
 
 
-# binary outcome notes ----
+#     binary outcome notes ----
 
 lm.binary.1 = glm(as.numeric(comfort_rating_3lev)-1 ~ .,
                   data = d.model %>% mutate(comfort_rating_3lev = d$comfort_rating_3lev) %>% 

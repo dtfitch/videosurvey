@@ -85,8 +85,11 @@ levels(d$usual_mode)[1]=NA
 d.video = d %>% group_by(video_name) %>% summarize(
   mean_comfort = mean(as.numeric(comfort_rating), na.rm = T),
   median_comfort = median(as.numeric(comfort_rating), na.rm = T),
+  var = var(as.numeric(comfort_rating)),
   speed = first(bike_speed_mph_ST),
-  NCHRP_BLOS_score = first(NCHRP_BLOS_score_ST)
+  NCHRP_BLOS_ST = first(NCHRP_BLOS_ST),
+  block_ID = first(block_ID),
+  group = first(VideoGroup)
 )
 
 #    Quick checks on representativeness of sample ----

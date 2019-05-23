@@ -123,6 +123,9 @@ levels(d$usual_mode_4lev) = c("Bike", "Public Trans", "Car", "Car", "Bike", "Car
 d$secondary_mode_BIKE = d$secondary_mode
 levels(d$secondary_mode_BIKE) = c("Bike", "Not_Bike", "Not_Bike", "Not_Bike", "Bike", "Not_Bike", "Not_Bike", "Not_Bike", "Not_Bike", "Not_Bike")
 
+d$hh_composition_4lev = d$hh_composition
+levels(d$hh_composition_4lev) = c("Alone only", "Multi", "Multi", "Multi", "Family only", "Roommates etc. only", "Multi")
+
 # May want to reduce child fields to binary, but note alot of missing data in these fields
 levels(d$child1617) = c(NA,0,1,2,0)
 levels(d$child6) = c(NA,0,1,2,3,0)
@@ -167,7 +170,7 @@ d.model = d %>% select(-c("cts_ID", "ID", "URL",
                           "block_ID", "sub_ID", #<- might want these later
                           "person_ID", "VideoGroup", "video_name")) %>%
   # hh18_older has weird entries and overlaps with household type anyway.
-  # hh_composition is also weirdly coded
+  # hh_composition is also weirdly coded. I recoded to 4-level.
   # housing_unit_type also has lots of missing data   
   # rent_split is similar to rent_share but more missing data
   # keep rent share (more descriptive with less missing data)
@@ -202,7 +205,7 @@ d.model = d %>% select(-c("cts_ID", "ID", "URL",
             "op_schedule_transit", "op_limit_driving", "op_need_own_car",
             "op_LIKE_COMMUTE_SUM", "secondary_mode_BIKE",
             "op_bike_often", # mostly captured by bike commuting
-            "rent_share",
+            "rent_share", "hh_composition_4lev",
             "urban_ST",
             #strongly correlated with bike_lane_SUM_ST:
             "shoulder_width_ft_ST", #removing this instead of "bike_lane_and_parking_lane_width_ft_ST" makes bike_lane_SUM_ST1 more sensical
@@ -215,7 +218,7 @@ names(d.model)
 
 
 # -----------------------------------------------------------------------------------
-# 3. Regression models ----
+# 3. Preliminary regression models ----
 
 #     Models with only street features and video names ----
 # Do street features explain as much as street id?
@@ -272,11 +275,12 @@ sort(nonzero.glmnetcr(glmcr.prelim, s = 21)$beta[1:16])
 
 # We find some data that we may consider outliers, but enough that we should perhaps involve it in modelling, e.g. person random effect?
 
-head(sort(lm.video_name$residuals), 30)
-tail(sort(lm.video_name$residuals), 30) 
+head(sort(lm.video_name$residuals), 5)
+tail(sort(lm.video_name$residuals), 5) 
 head(sort(lm.street$residuals), 30)
 tail(sort(lm.street$residuals), 30) 
 
+which.max(lm.video_name$residuals) #14705
 which.max(abs(lm.video_name$residuals)) #14705
 filter(d, person_ID == d$person_ID[14705]) #Ranked all video "very uncomforable", even though black was between and NCHRP scores were two E's and two A's
 which.max(abs(lm.street$residuals)) #10087
@@ -291,8 +295,50 @@ d$person_ID[c(which.max(abs(lm.video_name$residuals)), which.max(abs(lm.street$r
 #View(d %>% mutate(x = as.numeric(comfort_rating)) %>% group_by(person_ID) %>%
 #            mutate(y = max(x) - min(x)) %>% filter(y == 0) %>% arrange(person_ID))
 
-# ------------------------------ 4. Scrtach -----------------------------------------
+# 4. Better models accounting for person (random) effects ---------------------------
+#     Exploratory: Figure out how to account for between vs. within in the model ----
+
+#---
+# Note: blocks don't reprsent between or within selections (as I has thought), rather they represent types of videos ("loosely based on bike infrastructure, whether the road was a collector or arterial, and speed/traffic of cars")
+# so a video is always in the same block, but the person may see it as within (i.e. they only see it with other videos in the same block [in which case they have uniform block_ID]), or between (e.g  the only see it with other videos NOT within the same block[in which case they have no duplicated block_ID]). The block corresponds to broad road type, but the video_group is just an experimental variable. There should roughly be balance across blob and video_group. clear as mud?
+
+# In short *person_ID*, not block_ID, is either between or within 
+#---
+
+# Compare those who received "between" vs. "within" ---
+
+#mean - between stays closer to the center
+d %>% group_by(person_ID) %>% 
+  summarize(mean = mean(as.numeric(comfort_rating)), type = first(VideoGroup)) %>%
+  ggplot() + geom_density(aes(x = mean, fill = type), alpha = .5)
+
+#variance - within variance more likely to be small
+d %>% group_by(person_ID) %>% 
+  summarize(var = var(as.numeric(comfort_rating)), type = first(VideoGroup)) %>%
+  ggplot() + geom_density(aes(x = var, fill = type), alpha = .5)
+
+# Next tables summarizes that those who saw between tended to have higher variance in their ratings, but less variance in their means (summarizing the plots above). Also there's no major difference in mean of means which is good, i.e. the two groups have similar coverage and shouldn't have different intercepts. 
+
+d %>% group_by(person_ID) %>% 
+  summarize(var = var(as.numeric(comfort_rating)),
+            mean = mean(as.numeric(comfort_rating)),
+            type = first(VideoGroup)) %>% 
+  group_by(type) %>% summarize(mean_of_means = mean(mean),
+                               mean_of_variances = mean(var, na.rm = T),
+                               variance_of_means = var(mean))
+
+# Something of a negative relationship between median score and variance, but this
+# may be addressed by the logit transformation 
+
+d %>% group_by(video_name) %>%
+  summarize(var = var(as.numeric(comfort_rating), na.rm = T),
+            med = median(as.numeric(comfort_rating)),
+            n = n()) %>% arrange(var)
+
+summary(lm(d.video$var ~ d.video$median_comfort))
 #     Ordered logit with person random effect? ####
+
+
 
 library("ordinal")
 
@@ -310,6 +356,7 @@ names(d.model.randord)
 #2: glm.fit: fitted probabilities numerically 0 or 1 occurred 
 
 
+# ------------------------------ 4. Scrtach -----------------------------------------
 #     Decision tree ----
 
 library(rpart)

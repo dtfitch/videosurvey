@@ -20,6 +20,11 @@ Analysis of bicycling comfort from a video survey
     - Probably due to being block in a non-excerpted part of the video. Ignore this variable.
   - Exact difference between bike lane, width, shoulder, etc.
   
-
+- Next up
+    - How due the existing ratings do in comparison to simple feature-based models. LTS is simpler, how does it compare to NCHRP and HCM? How fine/course should the classification be? Is a binary classification possible?
+    - Compare models with individual stuff (person-level model) + 0) Video Name 1) NCHRP 2) HCM 3) LTS 4) Raw Features
+    - What does it take for x percent of people to be comfortable?
+    - Hypothetical environments
+    - What would be available with something like census data? (e.g. without opinion statements)
   
   

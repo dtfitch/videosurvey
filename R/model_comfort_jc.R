@@ -8,21 +8,23 @@
 # Levels: L, Q, C, 4 ??
 #
 # Notes:
-#     Removed housing cost as a variable because it has a fairly large amount of missing data, 
+#     1. Removed housing cost as a variable because it has a fairly large amount of missing data, 
 #       has some significant outliers and potentially bad data (undergrads paying 5000/month in davis>)
 #       and, most importantly, the housing costs in a college town/a majority student population aren't generalizable.
 #       See scratch notes below.
 #       Left it in preliminary models to show the direction is generally negative, as expected.
-#     Ended up with a very simple model to impute age when missing (just based on primary role)
+#     2. Ended up with a very simple model to impute age when missing (just based on primary role)
 #       because other variables offered only minor improvements and had some missing data
-#     Considered imputing gender, but would those people with NA have not answered intentionally?
+#     3. Considered imputing gender, but would those people with NA have not answered intentionally?
 #       For exploring imputations and brms used character "NA" factor level for those entries, akin to "other"
 #       Excluding other NAs in bayesian model for now so I can treat opinion variables as numeric (for convencience)
 #         Not sure how to integrate "NA" level into ordered scale otherwise
+#     4. A model with just bike line level (none, lane, protected lane) is much better than any of the scores models on their own, and only slightly better than an ensemble model of scores.
+#       
 # -----------------------------------------------------------------------------------
 # 0. Setup ####
 
-library(MASS)
+#library(MASS) #conflicts
 try({detach("package:dplyr")})
 library(dplyr) # to use dplyr select
 library("glmnetcr")
@@ -235,6 +237,21 @@ names(d.model)
 # -----------------------------------------------------------------------------------
 # 3. Preliminary regression models ----
 
+
+#     Models with only scores features and video names ----
+
+summary(MASS::polr(as.ordered(comfort_rating) ~ NCHRP_BLOS_score_ST, data = d.scores, Hess = TRUE))
+
+summary(lm(comfort_rating ~ NCHRP_BLOS_score_ST, data = d.scores))
+summary(lm(comfort_rating ~ as.factor(NCHRP_BLOS_ST), data = d.scores))       
+summary(lm(comfort_rating ~ as.factor(LTS_ST), data = d.scores))       
+summary(lm(comfort_rating ~ as.factor(HCM_BLOS_ST), data = d.scores)) #best of lot       
+summary(lm(comfort_rating ~ as.factor(HCM_BLOS_ST) + as.factor(LTS_ST) + NCHRP_BLOS_score_ST, 
+           data = d.scores)) #ensemble of scores slightly better than bike land model below
+summary(lm(comfort_rating ~ as.numeric(d.model$bike_lane_SUM_ST), data = d.scores)) #better than scores
+
+# see "Models with only street features" for expansion of this 
+                                      
 #     Models with only street features and video names ----
 # Do street features explain as much as street id?
 # Basically YES, but we also see from this that there is lots of variation in ratings within videos
@@ -245,7 +262,7 @@ lm.video_name = lm(as.numeric(comfort_rating) ~ video_name, data = d)
 summary(lm.video_name)
 
 # Model from features (8 fewer variables than above, only 2% loss in R-squared, and coef make sense)
-d.model.street = d %>% select(matches("(ST|comfort_rating)", ignore.case = FALSE)) %>%
+d.model.street = d %>% select(matches("ST|comfort_rating", ignore.case = FALSE)) %>%
   #remove some vars strongly correlated with others
   select(-c("veh_volume_ST", "comfort_rating_3lev","NCHRP_BLOS_score_ST", #lower score -> A
             "prevailing_speed_mph_ST",
@@ -253,6 +270,7 @@ d.model.street = d %>% select(matches("(ST|comfort_rating)", ignore.case = FALSE
             #"shoulder_width_ft_ST",
             #"speed_limit_mph_ST",
             "HCM_BLOS_ST", "LTS_ST", 
+            "NCHRP_BLOS_ST",
             "bikeway_width_ft_ST",
             "urban_ST", 
             "protected_ST", "buffer_ST", "bike_lane_blocked_ST", "bike_lane_SUM_ST")) 
@@ -486,7 +504,7 @@ names(d.model.randord)
 #  1: glm.fit: algorithm did not converge 
 #2: glm.fit: fitted probabilities numerically 0 or 1 occurred 
 
-# brms ----
+#     brms ----
 
 library(brms)
 options(mc.cores=(parallel::detectCores())/3)
@@ -499,7 +517,7 @@ d.remodel = d.model %>%
                 #so we don't have to lose this data and respect "NA" responses:
                 mutate(female = replace(female, is.na(female), "NA")) 
 
-# missing data ---- 
+#       missing data ---- 
 # For now, just remove rows with missing data   
   # generally rows with a lot of missing data ahve many missing opinion variables
   # @View(filter(d.person, rowSums(is.na(d.person)) >= 10))$person_ID
@@ -512,7 +530,7 @@ table(rowSums(is.na(d.person)))
 
 d.remodel.mat = model.matrix(comfort_rating_ordered ~ ., d.remodel)[,-1]
 
-# scaling ---- 
+#       scaling ---- 
 
 d.remodel.mat = cbind(
   apply(d.remodel.mat[,-which(colnames(d.remodel.mat)=="person_ID")], 2, scale, center = TRUE, scale = T), 
@@ -523,15 +541,15 @@ d.remodel.df$comfort_rating_ordered = d.model$comfort_rating_ordered[rowSums(is.
 d.remodel.df$video_name = d$video_name[rowSums(is.na(d.remodel))==0]
 
 
-# model ----
+#       model ----
 randord.brms = brm(comfort_rating_ordered ~ (1|person_ID) + . - person_ID, 
     data=d.remodel.df %>% select(-c("video_name")), 
     family=cumulative("logit"), iter = 2000)
 save.image()
-summary(randord.brms)
+summary.randord.brms = summary(randord.brms)
 plot(randord.brms)
 
-# Predictions ----
+#       Predictions ----
 
 
 #Overall
@@ -567,7 +585,7 @@ pi.samples.melt$variable = factor(pi.samples.melt$variable,
 ggplot(data = pi.samples.melt) + 
   geom_density_ridges(aes(x = value, group = variable, y = variable))
 
-#Compare predictions from ordinal model with and without random effects ----
+#           Compare predictions from ordinal model with and without random effects ----
 ord.prelim.predict = data.frame(predict.ord = as.numeric(predict(ord.prelim)), 
                                 person_ID = d[rowSums(is.na(d.model))==0, c("person_ID")],
                                 video_name = d[rowSums(is.na(d.model))==0, c("video_name")])

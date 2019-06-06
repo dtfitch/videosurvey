@@ -154,3 +154,24 @@ d %>% group_by(bike_lane_ST, op_like_biking_3lev) %>%
   geom_point(aes(x = bike_lane_ST, y = m, color = as.factor(op_like_biking_3lev)), size = 5) +
   scale_color_manual(values = c("red", "green")) + coord_flip()
 
+
+# 4. Comparing ratings to "scores" ----
+
+d.scores = d %>% select(matches("NCHRP|HCM|LTS|rating|video_name")) %>% mutate_if(is.ordered, as.numeric) 
+
+ggplot(melt(d.scores %>% select(-c("comfort_rating_3lev", "NCHRP_BLOS_score_ST")), id = c("video_name", "comfort_rating")) %>%
+         group_by(interaction(value, variable)) %>% mutate(m = mean(comfort_rating))) + 
+  geom_density(aes(x = comfort_rating, fill = variable, color = variable), bw = .7) + 
+  facet_wrap(~interaction(value, variable), scales = "free_y", ncol = 1)  +
+  geom_vline(aes(xintercept = m), col = "red") + 
+  theme_bw()
+
+ggsave(filename = "IMG/ratings_vs_scores.png", height = 16)
+
+ggplot(melt(d.scores %>% select(-c("comfort_rating_3lev", "NCHRP_BLOS_score_ST")), id = c("video_name", "comfort_rating")) %>%
+         group_by(interaction(value, variable)) %>% mutate(m = mean(comfort_rating))) + 
+  geom_density_ridges(aes(x = comfort_rating, y = interaction(value, variable), 
+                          fill = variable, color = variable), bandwidth = .7, color = "black") + 
+  theme_bw()
+
+ggsave(filename = "IMG/ratings_vs_scores_joy.png", height = 12)

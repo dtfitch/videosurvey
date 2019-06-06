@@ -7,6 +7,18 @@
 #
 # Levels: L, Q, C, 4 ??
 #
+# Notes:
+#     Removed housing cost as a variable because it has a fairly large amount of missing data, 
+#       has some significant outliers and potentially bad data (undergrads paying 5000/month in davis>)
+#       and, most importantly, the housing costs in a college town/a majority student population aren't generalizable.
+#       See scratch notes below.
+#       Left it in preliminary models to show the direction is generally negative, as expected.
+#     Ended up with a very simple model to impute age when missing (just based on primary role)
+#       because other variables offered only minor improvements and had some missing data
+#     Considered imputing gender, but would those people with NA have not answered intentionally?
+#       For exploring imputations and brms used character "NA" factor level for those entries, akin to "other"
+#       Excluding other NAs in bayesian model for now so I can treat opinion variables as numeric (for convencience)
+#         Not sure how to integrate "NA" level into ordered scale otherwise
 # -----------------------------------------------------------------------------------
 # 0. Setup ####
 
@@ -14,6 +26,9 @@ library(MASS)
 try({detach("package:dplyr")})
 library(dplyr) # to use dplyr select
 library("glmnetcr")
+library("brms")
+library(forcats)
+library(ggridges)
 
 setwd("~/Documents/videosurvey")
 source("R/data_comfort.R")
@@ -68,7 +83,7 @@ d.demo = d %>% group_by(person_ID) %>% select(-contains("op")) %>%
   summarise_all(first) %>%
   select(-c("URL", "comfort_rating_3lev", "person_ID")) %>%
   # second-round removals
-  select(-c("edu_self", "child6", "child615", "child1617", "monthly_housing_cost", "hh18_older"))
+  select(-c("edu_self", "child6", "child615", "child1617", "monthly_housing_cost_class", "hh18_older"))
 
 d.demo.model.matrix = model.matrix(comfort_rating ~ . -1, data = d.demo)
 
@@ -168,7 +183,7 @@ d$speed_prevail_minus_limit_ST = d$prevailing_speed_mph_ST - d$speed_limit_mph_S
 
 d.model = d %>% select(-c("cts_ID", "ID", "URL",
                           "block_ID", "sub_ID", #<- might want these later
-                          "person_ID", "VideoGroup", "video_name")) %>%
+                          "VideoGroup", "video_name")) %>%
   # hh18_older has weird entries and overlaps with household type anyway.
   # hh_composition is also weirdly coded. I recoded to 4-level.
   # housing_unit_type also has lots of missing data   
@@ -249,16 +264,17 @@ plot(predict(lm.street), predict(lm.video_name)); abline(a=0,b=1)
 
 #     Preliminary overall models ----
 
-# Numeric response (don't use)
-lm.prelim = lm(comfort_rating ~ . , data = d.model %>% select(-"comfort_rating_ordered"))
+#       Numeric response (don't use) ----
+lm.prelim = lm(comfort_rating ~ . , data = d.model %>% 
+                 select(-c("comfort_rating_ordered", "person_ID")))
 summary(lm.prelim)
 
-# Ordered response (OK)
-d.model.ord =  d.model %>% select(-"comfort_rating")
+#       Ordered response (OK) ----
+d.model.ord =  d.model %>% select(-c("comfort_rating", "person_ID"))
 ord.prelim = polr(comfort_rating_ordered ~ ., data = d.model.ord, Hess = TRUE)
 summary(ord.prelim)
 
-#     Penalized models (GLMNET, lasso) ----
+#       Penalized models (GLMNET, lasso) ----
 
 glmcr.prelim = glmnetcr(x = model.matrix(ord.prelim)[,-1], y = model.frame(ord.prelim)$comfort_rating_ordered)
 names(glmcr.prelim)
@@ -295,7 +311,124 @@ d$person_ID[c(which.max(abs(lm.video_name$residuals)), which.max(abs(lm.street$r
 #View(d %>% mutate(x = as.numeric(comfort_rating)) %>% group_by(person_ID) %>%
 #            mutate(y = max(x) - min(x)) %>% filter(y == 0) %>% arrange(person_ID))
 
+# ----------------------------------------------------------------------------------
+# 4.  Missing Data ----
+
+#   Data set (by person) of person-level variables for potential imputation & filtering ----
+
+d.person = d %>% 
+  select(-contains("ST", ignore.case = FALSE)) %>%
+  select(-contains("video", ignore.case = TRUE)) %>%
+  select(-contains("comfort_rating", ignore.case = TRUE)) %>%
+  select(-contains("3lev")) %>%
+  select(-c("usual_mode", "hh_composition")) %>% # use 4lev instead
+  select(-c("URL")) %>%
+  group_by(person_ID) %>%
+  summarise_all(list(first)) %>%
+  # keep only person_ID for later identification
+  select(-c("ID", "block_ID", "sub_ID", "ID", "cts_ID")) %>%
+  # too much NA
+  select(-contains("child")) %>%
+  select(-c( "rent_split", "housing_unit_type", "edu_parent",
+             "hh18_older", "edu_self")) %>%
+  mutate(female = replace(female, is.na(female), "NA"))
+
+#       Explore age variable (ended up with very simple model) ----
+
+# Similar pattern for age and primary role as housing cost, not surprising
+ggplot(d, aes(x = age)) + 
+  geom_histogram() + 
+  facet_wrap(~primary_role, scales = "free_y", ncol = 1)
+
+d.person.age = d.person %>% 
+  #just in case
+  select(-contains("age_impute")) %>%
+  #repeat other vars
+  select(-c("secondary_mode", "monthly_housing_cost_class")) %>%
+  # too much NA and not significant anyway
+  select(-c("distance")) %>%
+  # Use commute sum variable instead, indiv. vars generally not signif anyway
+  select(-c("op_schedule_transit", "op_commute_goes_well",
+            "op_commute_best_imagine", "op_satisfied_with_commute",
+            "op_commute_positive_feelings", "op_commute_no_change",
+            # took out more vars in favor of simpler imputation model, fewer excluded entries
+            "op_commute_positive_negative", "op_like_biking", "op_feel_safe",
+            "op_like_transit", "op_like_driving", "op_like_driving", "op_travel_wasted",
+            "op_arrive_professional", "op_bike_often", "op_arrive_professional",
+            "op_need_car", "op_travel_stress", "op_limit_driving", "op_need_own_car",
+            "op_smartphone",
+            "bike_access", "secondary_mode_BIKE", "bike_ability", "usual_mode_4lev",
+            #too much missing in rows also missing age, impairs imputation:
+            "monthly_housing_cost", "rent_share", "hh_composition_4lev", 
+            "license", "op_LIKE_COMMUTE_SUM", "comfort_four_no_lane", "female",
+            "op_eco_concern"
+            )
+  )
+
+names(d.person.age)
+colSums(is.na(d.person.age))
+
+# For lm, residual plot showwed some fanning and effects of restricted age (can't be below 18) , 
+# -> poisson glm respects the minimum and residuals look more balanced 
+#    (we expect variance to go up with age, to some extent)
+# Max outliers are outliers are for two 54 yr. old undergrads
+
+lm.age = lm(age - 18 ~.,  data = d.person.age %>% select(-"person_ID")) 
+
+glm.age = glm(age - 18 ~.,  data = d.person.age %>% select(-"person_ID"), #%>%
+              #filter(! (grepl(primary_role, pattern = "Undergraduate") & age > 50) ),
+              family = "poisson")
+
+par(mfrow = c(1,2))
+hist(resid(glm.age, type = "response")); hist(resid(lm.age))
+quantile(resid(glm.age, type = "response"), c(.005,.05,.9,.995))
+quantile(resid(lm.age, type = "response"), c(.005,.05,.9,.995))
+summary(glm.age); summary(lm.age)
+dim(model.matrix(glm.age)) #lose ~ 7pct of data, including 45 na's in age collected
+plot(glm.age)
+plot(lm.age)
+#age means by role
+#d.person %>% group_by(primary_role) %>% summarize(mean(age, na.rm = T))
+#compare glm and lm predictions
+#plot(sort(18 + predict(glm.age, type = "response")), type = 'l', ylim = c(15,75)); 
+#points(sort(18 + predict(lm.age)), col ="red", type = "l")
+
+#How many rows do we lose?
+rowSums(is.na(d.person.age %>% filter(is.na(age)) %>% select(-"age")))
+colSums(is.na(d.person.age %>% filter(is.na(age)) %>% select(-"age")))
+
+#       age imputation ----
+age.impute = 18 + predict(glm.age, newdata = d.person %>% filter(is.na(age)), type = "response")       
+d.person$age_impute = d.person$age
+d.person$age_impute[is.na(d.person$age)] = age.impute
+
+names(age.impute) = (d.person %>% filter(is.na(age)))$person_ID
+d.model$person_ID = d$person_ID #works if same dim
+d.model$age_impute = d.model$age
+d.model.age.impute =  age.impute[as.character(d.model$person_ID)]
+d.model$age_impute[!is.na(d.model.age.impute)] = d.model.age.impute[!is.na(d.model.age.impute)]
+ 
+#       Compare to cross-validated model (if more complicated model) ----
+
+#Hold out set with vanilla poisson glm
+s = sample(1:nrow(d.person.age))[1:300] #hold-out set; make large enough to capture factor levels
+glm.age = glm(age - 18 ~.,  data = d.person.age[-s,] %>% select(-"person_ID"), family = "poisson")
+test.resids = d.person.age[s,"age"] - (18 + predict(glm.age, newdata = d.person.age[s,], type = "response"))    
+hist(test.resids[[1]], breaks = 20)
+quantile(test.resids[[1]], c(.005,.995), na.rm = T)
+
+cvglm.age = cv.glmnet(model.matrix(glm.age), glm.age$y)
+#plot(cvglm.age)
+coef(cvglm.age, s = cvglm.age$lambda.min)
+s.x = model.matrix(age ~ ., data = d.person.age[s,] %>% select(-c("person_ID")))
+
+cv.test.resids = d.person.age[s[-which(rowSums(is.na(d.person.age[s,])) > 0)],"age"]  - 
+                    (18 + predict.cv.glmnet(cvglm.age, newx = s.x, type = "response", s = cvglm.age$lambda.min))
+hist(cv.test.resids[[1]], breaks = 20)
+quantile(cv.test.resids[[1]], c(.05,.95))
+
 # 4. Better models accounting for person (random) effects ---------------------------
+
 #     Exploratory: Figure out how to account for between vs. within in the model ----
 
 #---
@@ -338,8 +471,6 @@ d %>% group_by(video_name) %>%
 summary(lm(d.video$var ~ d.video$median_comfort))
 #     Ordered logit with person random effect? ####
 
-
-
 library("ordinal")
 
 d.model.randord =  d.model %>% select(-"comfort_rating") %>% mutate(person_ID = as.factor(d$person_ID))
@@ -355,8 +486,145 @@ names(d.model.randord)
 #  1: glm.fit: algorithm did not converge 
 #2: glm.fit: fitted probabilities numerically 0 or 1 occurred 
 
+# brms ----
 
-# ------------------------------ 4. Scrtach -----------------------------------------
+library(brms)
+options(mc.cores=(parallel::detectCores())/3)
+
+d.remodel = d.model %>% 
+                select(-"comfort_rating") %>%
+                select(-"monthly_housing_cost_class") %>%
+                #use age_impute instead
+                select(-"age") %>%
+                #so we don't have to lose this data and respect "NA" responses:
+                mutate(female = replace(female, is.na(female), "NA")) 
+
+# missing data ---- 
+# For now, just remove rows with missing data   
+  # generally rows with a lot of missing data ahve many missing opinion variables
+  # @View(filter(d.person, rowSums(is.na(d.person)) >= 10))$person_ID
+
+sort(colSums(is.na(d.model)))
+sort(colSums(is.na(d.remodel)))
+table(rowSums(is.na(d.person)))
+
+#lose 384 rows, or 79 individuals (out of 15288 and 3089 respectively)
+
+d.remodel.mat = model.matrix(comfort_rating_ordered ~ ., d.remodel)[,-1]
+
+# scaling ---- 
+
+d.remodel.mat = cbind(
+  apply(d.remodel.mat[,-which(colnames(d.remodel.mat)=="person_ID")], 2, scale, center = TRUE, scale = T), 
+  person_ID = d.remodel.mat[,which(colnames(d.remodel.mat)=="person_ID")]) #had to exclude person_ID from scaling
+
+d.remodel.df = data.frame(d.remodel.mat)
+d.remodel.df$comfort_rating_ordered = d.model$comfort_rating_ordered[rowSums(is.na(d.remodel))==0]
+d.remodel.df$video_name = d$video_name[rowSums(is.na(d.remodel))==0]
+
+
+# model ----
+randord.brms = brm(comfort_rating_ordered ~ (1|person_ID) + . - person_ID, 
+    data=d.remodel.df %>% select(-c("video_name")), 
+    family=cumulative("logit"), iter = 2000)
+save.image()
+summary(randord.brms)
+plot(randord.brms)
+
+# Predictions ----
+
+
+#Overall
+randord.brms.predict = predict(randord.brms)
+randord.brms.predict.ev = data.frame(predict.brms = 
+  randord.brms.predict %*% c(1:7), 
+  person_ID = d.remodel.df$person_ID,
+  video_name = d.remodel.df$video_name)
+
+hist(predict(randord.brms, newdata = d.remodel.df[1,-c(15, 31:32)], nsamples = 1000, re_formula = NA, summary = F), breaks = 30)
+predict(randord.brms, newdata = filter(d.remodel.df, person_ID == "2149") %>% select(-c("comfort_rating_ordered", "video_name")), nsamples = 1000, re_formula = NA, summary = F)
+
+pi.samples = posterior_samples(randord.brms, pars = "person_ID")
+
+plot(as.numeric(d.remodel.df$comfort_rating_ordered) - randord.brms.predict.ev$predict.brms) #apply(randord.brms.predict, 1, which.max)
+hist(plot(as.numeric(d.remodel.df$comfort_rating_ordered) - predict(randord.brms) %*% c(1:7)))
+
+# posterior sampling of person effects
+pi.samples = posterior_samples(randord.brms, pars = "person_ID")
+pi.means = apply(pi.samples, 2, mean)
+hist(pi.means)
+#person effects can be large. Especially for people who always feel uncomfortable despite a large bike lane
+which(pi.means < -5 )
+#weird that they all have the same videos?
+filter(d, person_ID %in% c("21", "2149", "1587", "2060", "44")) %>% select(comfort_rating, NCHRP_BLOS_ST, bike_lane_SUM_ST, comfort_four_no_lane, video_name, VideoGroup, person_ID) %>%
+  arrange(person_ID)
+
+length(which(abs(pi.means) > 3 ))
+
+pi.samples.melt = melt(data.frame(pi.samples[,which(abs(pi.means) > 3 )]))
+pi.samples.melt$variable = factor(pi.samples.melt$variable,
+                                  levels = unique(pi.samples.melt$variable)[order(pi.means[which(abs(pi.means) > 3 )])])
+ggplot(data = pi.samples.melt) + 
+  geom_density_ridges(aes(x = value, group = variable, y = variable))
+
+#Compare predictions from ordinal model with and without random effects ----
+ord.prelim.predict = data.frame(predict.ord = as.numeric(predict(ord.prelim)), 
+                                person_ID = d[rowSums(is.na(d.model))==0, c("person_ID")],
+                                video_name = d[rowSums(is.na(d.model))==0, c("video_name")])
+
+ord.predict.compare = left_join(ord.prelim.predict, randord.brms.predict.ev, 
+                                by = c("person_ID", "video_name"))
+
+ord.predict.compare$response = as.numeric(ord.prelim$model$comfort_rating_ordered)
+ord.predict.compare = ord.predict.compare %>% arrange(response)
+
+plot(ord.predict.compare$predict.ord, col = "red", type = "p")
+points(ord.predict.compare$predict.brms, col = "green", type = "p")
+points(ord.predict.compare$response, color = "black", type = "l")
+
+par(mfrow = c(1,1))
+hist(ord.predict.compare$predict.ord - ord.predict.compare$response, col = "gray", ylim = c(0,5000))
+hist(ord.predict.compare$predict.brms - ord.predict.compare$response, add = T, col = "green", density = 20)
+quantile(ord.predict.compare$predict.ord - ord.predict.compare$response, seq(0.05,.95,.05))
+round(quantile(ord.predict.compare$predict.brms - ord.predict.compare$response, seq(0.05,.95,.05)),2)
+round(quantile(ord.predict.compare$predict.brms - ord.predict.compare$response, seq(0.01,.99,.01)),2)
+
+# ------------------------------ xx. Scratch -----------------------------------------
+
+#       Explore housing cost (most missing data of variables in prelim models) ----
+
+# Visualize relationship between housing cost and primary role
+# definitely a pattern: dist moves expands right from student to grad to visiting (probably many postdocs) to staff to faculty
+ggplot(d, aes(x = monthly_housing_cost)) + 
+  geom_histogram() + 
+  facet_wrap(~primary_role, scales = "free_y", ncol = 1)
+
+# outliers
+View(filter(d, monthly_housing_cost >= 5000)) 
+
+colSums(apply(d, 2, is.na))
+colSums(apply(d.model, 2, is.na))
+table(rowSums(apply(d.model, 2, is.na)))
+
+#hard to predict housing costs
+summary(lm(monthly_housing_cost_class ~ ., data = d.model))
+
+sort(colSums(apply(d.person, 2, is.na)))
+
+lm.housing.cost = lm(as.numeric(monthly_housing_cost) ~ ., data = d.person %>% 
+                       select(-"person_ID") %>%
+                       select(-"monthly_housing_cost_class") %>%
+                       # has small cells, use _BIKE version instead:
+                       select(-c("secondary_mode")) %>%
+                       # not significant, want more DF
+                       select(-c("op_commute_best_imagine", "op_satisfied_with_commute", 
+                                 "op_commute_goes_well", "op_like_driving", "op_travel_wasted",
+                                 "op_eco_concern", "op_need_car", "op_commute_no_change",
+                                 "op_limit_driving", "op_smartphone", "secondary_mode_BIKE"))
+                       ) 
+
+summary(lm.housing.cost)
+
 #     Decision tree ----
 
 library(rpart)

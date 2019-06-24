@@ -3,6 +3,10 @@
 #
 # To do:
 # - random effects in ordered logit
+#     - do we want a stronger prior? Is additive correct?
+#     - consider category-speciric effects for any terms? (see brms JSS paper)
+#     - revisit scaling method 
+# - horeshoe prior on model terms? (like penalized)
 # - decision trees to explore interaction effects
 #
 # Levels: L, Q, C, 4 ??
@@ -27,10 +31,11 @@
 #library(MASS) #conflicts
 try({detach("package:dplyr")})
 library(dplyr) # to use dplyr select
-library("glmnetcr")
-library("brms")
+library(glmnetcr)
+library(brms)
 library(forcats)
 library(ggridges)
+library(shinystan)
 
 setwd("~/Documents/videosurvey")
 source("R/data_comfort.R")
@@ -240,15 +245,23 @@ names(d.model)
 
 #     Models with only scores features and video names ----
 
-summary(MASS::polr(as.ordered(comfort_rating) ~ NCHRP_BLOS_score_ST, data = d.scores, Hess = TRUE))
+# None of these models perform particularly well. The residual deviance not much lower than for a null model. 
+# The key observation is that the model with bike lane (levels are none, lane, protected lane) does better than any of the scores on their own.
+#     Even the model with all three scores (8 predictors), does only slightly better than the bike lane model with only two predictors, and if we add speed limit to the bike lane model (still only 3 predictors) it outperforms the mdoel with all three scores
 
-summary(lm(comfort_rating ~ NCHRP_BLOS_score_ST, data = d.scores))
-summary(lm(comfort_rating ~ as.factor(NCHRP_BLOS_ST), data = d.scores))       
-summary(lm(comfort_rating ~ as.factor(LTS_ST), data = d.scores))       
-summary(lm(comfort_rating ~ as.factor(HCM_BLOS_ST), data = d.scores)) #best of lot       
-summary(lm(comfort_rating ~ as.factor(HCM_BLOS_ST) + as.factor(LTS_ST) + NCHRP_BLOS_score_ST, 
-           data = d.scores)) #ensemble of scores slightly better than bike land model below
-summary(lm(comfort_rating ~ as.numeric(d.model$bike_lane_SUM_ST), data = d.scores)) #better than scores
+#Null model:
+summary(MASS::polr(as.ordered(comfort_rating) ~ 1, data = d.scores, Hess = TRUE)) #Residual Deviance: 58676.76 
+
+#Score models:
+summary(MASS::polr(as.ordered(comfort_rating) ~ NCHRP_BLOS_score_ST, data = d.scores, Hess = TRUE)) # Residual Deviance: 58367.77 
+summary(MASS::polr(as.ordered(comfort_rating) ~ as.factor(HCM_BLOS_ST), data = d.scores, Hess = TRUE)) #Residual Deviance: 57619.62
+summary(MASS::polr(as.ordered(comfort_rating) ~ as.factor(LTS_ST), data = d.scores, Hess = TRUE)) #Residual Deviance: 57811.67 
+summary(MASS::polr(as.ordered(comfort_rating) ~ 
+                     as.factor(LTS_ST) + as.factor(HCM_BLOS_ST) + NCHRP_BLOS_score_ST, data = d.scores, Hess = TRUE)) #Residual Deviance: 56703.81 
+
+# Bike lane models:
+summary(MASS::polr(as.ordered(comfort_rating) ~ as.factor(d.model$bike_lane_SUM_ST), data = d.scores, Hess = TRUE)) #Residual Deviance: 56876.68 
+summary(MASS::polr(as.ordered(comfort_rating) ~ d.model$speed_limit_mph_ST + as.factor(d.model$bike_lane_SUM_ST), data = d.scores, Hess = TRUE)) #Residual Deviance: 56363.20 
 
 # see "Models with only street features" for expansion of this 
                                       
@@ -519,7 +532,7 @@ d.remodel = d.model %>%
 
 #       missing data ---- 
 # For now, just remove rows with missing data   
-  # generally rows with a lot of missing data ahve many missing opinion variables
+  # generally rows with a lot of missing data have many missing opinion variables
   # @View(filter(d.person, rowSums(is.na(d.person)) >= 10))$person_ID
 
 sort(colSums(is.na(d.model)))
@@ -540,20 +553,52 @@ d.remodel.df = data.frame(d.remodel.mat)
 d.remodel.df$comfort_rating_ordered = d.model$comfort_rating_ordered[rowSums(is.na(d.remodel))==0]
 d.remodel.df$video_name = d$video_name[rowSums(is.na(d.remodel))==0]
 
+#better off just diving by max so all on 0-1 scale?
+
+d.remodel.mat = model.matrix(comfort_rating_ordered ~ ., d.remodel)[,-1]
+
+d.remodel.mat2 = cbind(
+  apply(d.remodel.mat[,-which(colnames(d.remodel.mat)=="person_ID")], 2, function(x) {x/max(x, na.rm = T)}), 
+  person_ID = d.remodel.mat[,which(colnames(d.remodel.mat)=="person_ID")]) #had to exclude person_ID from scaling
+
+d.remodel.df2 = data.frame(d.remodel.mat2)
+d.remodel.df2$comfort_rating_ordered = d.model$comfort_rating_ordered[rowSums(is.na(d.remodel))==0]
+d.remodel.df2$video_name = d$video_name[rowSums(is.na(d.remodel))==0]
+
+
 
 #       model ----
+
+# Model with person-level random effects
+
+#Setting this option will change the default for brm
+options("mc.cores" = min(parallel::detectCores(), 4))
+#getOption("mc.cores")
+
 randord.brms = brm(comfort_rating_ordered ~ (1|person_ID) + . - person_ID, 
     data=d.remodel.df %>% select(-c("video_name")), 
     family=cumulative("logit"), iter = 2000)
-save.image()
-summary.randord.brms = summary(randord.brms)
+
+# *** #
+randord.brms2 = brm(comfort_rating_ordered ~ (1|person_ID) + . - person_ID, 
+                   data=d.remodel.df2 %>% select(-c("video_name")), 
+                   family=cumulative("logit"), iter = 2000)
+
+
+# quick evaluate output
+summary(randord.brms)
 plot(randord.brms)
+# methods(class = "brmsfit")
+# standata(randord.brms) 
+# marginal_effects(randord.brms) #makes me realize potential weirdness of scaling factor variabes. Better approach?
+# launch_shinystan(randord.brms)
 
 #       Predictions ----
 
+# Overall
+predict(randord.brms, newdata = d.remodel.df[1,])
 
-#Overall
-randord.brms.predict = predict(randord.brms)
+randord.brms.predict = predict(randord.brms) #posterior probs of each class with randomness
 randord.brms.predict.ev = data.frame(predict.brms = 
   randord.brms.predict %*% c(1:7), 
   person_ID = d.remodel.df$person_ID,
@@ -562,7 +607,10 @@ randord.brms.predict.ev = data.frame(predict.brms =
 hist(predict(randord.brms, newdata = d.remodel.df[1,-c(15, 31:32)], nsamples = 1000, re_formula = NA, summary = F), breaks = 30)
 predict(randord.brms, newdata = filter(d.remodel.df, person_ID == "2149") %>% select(-c("comfort_rating_ordered", "video_name")), nsamples = 1000, re_formula = NA, summary = F)
 
+# person-level random effects -- do we want a different prior?
 pi.samples = posterior_samples(randord.brms, pars = "person_ID")
+hist(apply(pi.samples, 2, median), breaks = 20)
+summary(apply(pi.samples, 2, median))
 
 plot(as.numeric(d.remodel.df$comfort_rating_ordered) - randord.brms.predict.ev$predict.brms) #apply(randord.brms.predict, 1, which.max)
 hist(plot(as.numeric(d.remodel.df$comfort_rating_ordered) - predict(randord.brms) %*% c(1:7)))
@@ -586,7 +634,10 @@ ggplot(data = pi.samples.melt) +
   geom_density_ridges(aes(x = value, group = variable, y = variable))
 
 #           Compare predictions from ordinal model with and without random effects ----
-ord.prelim.predict = data.frame(predict.ord = as.numeric(predict(ord.prelim)), 
+
+# Make data frame of response and model predictions (as expected values)
+ord.prelim.predict = data.frame(predict.ord = predict(ord.prelim, type = "probs") %*%  c(1:7), 
+                                predict.ord.mode = as.numeric(predict(ord.prelim, type = "class")),
                                 person_ID = d[rowSums(is.na(d.model))==0, c("person_ID")],
                                 video_name = d[rowSums(is.na(d.model))==0, c("video_name")])
 
@@ -596,16 +647,41 @@ ord.predict.compare = left_join(ord.prelim.predict, randord.brms.predict.ev,
 ord.predict.compare$response = as.numeric(ord.prelim$model$comfort_rating_ordered)
 ord.predict.compare = ord.predict.compare %>% arrange(response)
 
-plot(ord.predict.compare$predict.ord, col = "red", type = "p")
-points(ord.predict.compare$predict.brms, col = "green", type = "p")
-points(ord.predict.compare$response, color = "black", type = "l")
+# Compare by plotting ----
 
+# in base ----
+par(mfrow = c(1,3))
+plot(ord.predict.compare$predict.ord.mode, col = "red", type = "p", ylim = c(1,7), 
+     main = "no random effects - modal response")
+points(ord.predict.compare$response, col = "black", type = "l")
+plot(ord.predict.compare$predict.ord, col = "red", type = "p", ylim = c(1,7), main = "no random effects - expected")
+points(ord.predict.compare$response, col = "black", type = "l")
+plot(ord.predict.compare$predict.brms, col = "green", type = "p",ylim = c(1,7), main = "random effects")
+points(ord.predict.compare$response, col = "black", type = "l")
+
+#residuals + noise
+plot(rnorm(nrow(ord.predict.compare),0,.5) + (ord.predict.compare$predict.brms - ord.predict.compare$response)[order(ord.predict.compare$predict.brms)], pch = ".")
+
+# in ggplot ----
+cowplot::plot_grid(
+ggplot(ord.predict.compare) + 
+  geom_hex(aes(x = 1:nrow(ord.predict.compare), y = predict.ord), bins = 10) +
+  geom_line(aes(x = 1:nrow(ord.predict.compare), y = response), color = "red", size = 4),
+ggplot(ord.predict.compare) + 
+  geom_hex(aes(x = 1:nrow(ord.predict.compare), y = predict.brms), bins = 10) +
+  geom_line(aes(x = 1:nrow(ord.predict.compare), y = response), color = "red", size = 4)
+)
+ggsave("IMG/predictions_no_rand_vs_rand.png")
+
+# by histogram ----
 par(mfrow = c(1,1))
-hist(ord.predict.compare$predict.ord - ord.predict.compare$response, col = "gray", ylim = c(0,5000))
-hist(ord.predict.compare$predict.brms - ord.predict.compare$response, add = T, col = "green", density = 20)
-quantile(ord.predict.compare$predict.ord - ord.predict.compare$response, seq(0.05,.95,.05))
+hist(ord.predict.compare$predict.ord - ord.predict.compare$response, col = "gray", ylim = c(0,5000), breaks = 20,
+     main = "Comparison of residuals of model with (green) and without (gray) random effects")
+hist(ord.predict.compare$predict.brms - ord.predict.compare$response, add = T, col = "green", density = 30, breaks = 20)
+
+# by quantilese ----
+round(quantile(ord.predict.compare$predict.ord- ord.predict.compare$response, seq(0.05,.95,.05)),2)
 round(quantile(ord.predict.compare$predict.brms - ord.predict.compare$response, seq(0.05,.95,.05)),2)
-round(quantile(ord.predict.compare$predict.brms - ord.predict.compare$response, seq(0.01,.99,.01)),2)
 
 # ------------------------------ xx. Scratch -----------------------------------------
 

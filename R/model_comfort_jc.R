@@ -1,5 +1,6 @@
 # Models of bike comfort data
 # Jane Carlen, May 2019
+# -----------------------------------------------------------------------------------
 #
 # To do:
 # - random effects in ordered logit
@@ -25,17 +26,17 @@
 #         Not sure how to integrate "NA" level into ordered scale otherwise
 #     4. A model with just bike line level (none, lane, protected lane) is much better than any of the scores models on their own, and only slightly better than an ensemble model of scores.
 #       
-# -----------------------------------------------------------------------------------
+
 # 0. Setup ####
 
-#library(MASS) #conflicts
-try({detach("package:dplyr")})
-library(dplyr) # to use dplyr select
+library(MASS)
+library(dplyr) # after MASS to use dplyr select
 library(glmnetcr)
 library(brms)
 library(forcats)
 library(ggridges)
 library(shinystan)
+library(cowplot)
 
 setwd("~/Documents/videosurvey")
 source("R/data_comfort.R")
@@ -500,26 +501,9 @@ d %>% group_by(video_name) %>%
             n = n()) %>% arrange(var)
 
 summary(lm(d.video$var ~ d.video$median_comfort))
-#     Ordered logit with person random effect? ####
-
-library("ordinal")
-
-d.model.randord =  d.model %>% select(-"comfort_rating") %>% mutate(person_ID = as.factor(d$person_ID))
-names(d.model.randord)
-
-# randord.prelim = clmm2(comfort_rating_ordered ~ ., random=person_ID, data = d.model.randord)
-
-# doesn't work:
-# (and attempt with binary response got same error)
-# randord.prelim = clmm2(comfort_rating_ordered ~ ., random=person_ID, data = d.model.randord)
-# Error in setStart(rho) : attempt to find suitable starting values failed
-#In addition: Warning messages:
-#  1: glm.fit: algorithm did not converge 
-#2: glm.fit: fitted probabilities numerically 0 or 1 occurred 
-
+#     Ordered logit with person random effects ####
 #     brms ----
 
-library(brms)
 options(mc.cores=(parallel::detectCores())/3)
 
 d.remodel = d.model %>% 
@@ -527,8 +511,24 @@ d.remodel = d.model %>%
                 select(-"monthly_housing_cost_class") %>%
                 #use age_impute instead
                 select(-"age") %>%
+                mutate(person_ID = as.factor(person_ID),
+                       veh_volume2_ST = as.factor(veh_volume2_ST),
+                       divided_road_ST = as.factor(divided_road_ST), #trying this as factor since only three levels
+                       bike_ability = as.factor(bike_ability),
+                       comfort_four_no_lane = as.factor(comfort_four_no_lane),
+                       pavement_condition_ST = as.factor(pavement_condition_ST), #no idea of the units, so treat as factor
+                       street_parking_ST = as.factor(street_parking_ST),
+                       # This follows dillon's suggestion:
+                       speed_prevail_minus_limit_ST = 
+                         as.factor(cut(d.model$speed_prevail_minus_limit_ST, breaks = c(-13,-8, -3, 3, 8)))
+                ) %>%
+                #rest of numeric vars get put on 0-1 scale
+                mutate_at(vars(contains("op")), function(x) {x/5}) %>%
+                mutate_at(names(.)[which(sapply(., function(x) {is.numeric(x) && max(x, na.rm = T) > 1}))], 
+                          function(x) {x/max(x, na.rm = T)}) %>%
                 #so we don't have to lose this data and respect "NA" responses:
                 mutate(female = replace(female, is.na(female), "NA")) 
+str(d.remodel)
 
 #       missing data ---- 
 # For now, just remove rows with missing data   
@@ -537,34 +537,31 @@ d.remodel = d.model %>%
 
 sort(colSums(is.na(d.model)))
 sort(colSums(is.na(d.remodel)))
-table(rowSums(is.na(d.person)))
-
-#lose 384 rows, or 79 individuals (out of 15288 and 3089 respectively)
+table(rowSums(is.na(d.person))) #lose 384 rows, or 79 individuals (out of 15288 and 3089 respectively)
 
 d.remodel.mat = model.matrix(comfort_rating_ordered ~ ., d.remodel)[,-1]
 
-#       scaling ---- 
-
-d.remodel.mat = cbind(
-  apply(d.remodel.mat[,-which(colnames(d.remodel.mat)=="person_ID")], 2, scale, center = TRUE, scale = T), 
-  person_ID = d.remodel.mat[,which(colnames(d.remodel.mat)=="person_ID")]) #had to exclude person_ID from scaling
-
-d.remodel.df = data.frame(d.remodel.mat)
-d.remodel.df$comfort_rating_ordered = d.model$comfort_rating_ordered[rowSums(is.na(d.remodel))==0]
-d.remodel.df$video_name = d$video_name[rowSums(is.na(d.remodel))==0]
-
-#better off just diving by max so all on 0-1 scale?
-
-d.remodel.mat = model.matrix(comfort_rating_ordered ~ ., d.remodel)[,-1]
-
-d.remodel.mat2 = cbind(
-  apply(d.remodel.mat[,-which(colnames(d.remodel.mat)=="person_ID")], 2, function(x) {x/max(x, na.rm = T)}), 
-  person_ID = d.remodel.mat[,which(colnames(d.remodel.mat)=="person_ID")]) #had to exclude person_ID from scaling
-
-d.remodel.df2 = data.frame(d.remodel.mat2)
-d.remodel.df2$comfort_rating_ordered = d.model$comfort_rating_ordered[rowSums(is.na(d.remodel))==0]
-d.remodel.df2$video_name = d$video_name[rowSums(is.na(d.remodel))==0]
-
+#       scaling (put all on 0-1 scale by dividing by max) ---- 
+# 
+# d.remodel.mat = cbind(
+#   apply(d.remodel.mat[,-which(colnames(d.remodel.mat)=="person_ID")], 2, scale, center = TRUE, scale = T), 
+#   person_ID = d.remodel.mat[,which(colnames(d.remodel.mat)=="person_ID")]) #had to exclude person_ID from scaling
+# 
+# d.remodel.df = data.frame(d.remodel.mat)
+# d.remodel.df$comfort_rating_ordered = d.model$comfort_rating_ordered[rowSums(is.na(d.remodel))==0]
+# d.remodel.df$video_name = d$video_name[rowSums(is.na(d.remodel))==0]
+# 
+# #better off just diving by max so all on 0-1 scale?
+# 
+# d.remodel.mat = model.matrix(comfort_rating_ordered ~ ., d.remodel)[,-1]
+# 
+# d.remodel.mat2 = cbind(
+#   apply(d.remodel.mat[,-which(colnames(d.remodel.mat)=="person_ID")], 2, function(x) {x/max(x, na.rm = T)}), 
+#   person_ID = d.remodel.mat[,which(colnames(d.remodel.mat)=="person_ID")]) #had to exclude person_ID from scaling
+# 
+# d.remodel.df2 = data.frame(d.remodel.mat2)
+# d.remodel.df2$comfort_rating_ordered = d.model$comfort_rating_ordered[rowSums(is.na(d.remodel))==0]
+# d.remodel.df2$video_name = d$video_name[rowSums(is.na(d.remodel))==0]
 
 
 #       model ----
@@ -584,10 +581,24 @@ randord.brms2 = brm(comfort_rating_ordered ~ (1|person_ID) + . - person_ID,
                    data=d.remodel.df2 %>% select(-c("video_name")), 
                    family=cumulative("logit"), iter = 2000)
 
+# *** #
+randord.brms3 = brm(comfort_rating_ordered ~ (1|person_ID) + . - person_ID, 
+                    data=d.remodel, family=cumulative("logit"), iter = 2000)
+
 
 # quick evaluate output
 summary(randord.brms)
 plot(randord.brms)
+#
+post.randord.brms = as.array(randord.brms)
+post.randord.brms2 = as.array(randord.brms2)
+
+plot_grid(
+bayesplot::mcmc_intervals(post.randord.brms, pars = dimnames(post.randord.brms)$parameters[!grepl(dimnames(post.randord.brms)$parameters, pattern = "person_ID|lp__")], prob_outer = .95),
+
+bayesplot::mcmc_intervals(post.randord.brms2, pars = dimnames(post.randord.brms2)$parameters[!grepl(dimnames(post.randord.brms2)$parameters, pattern = "person_ID|lp__")], prob_outer = .95) + geom_vline(aes(xintercept = 0))
+)
+
 # methods(class = "brmsfit")
 # standata(randord.brms) 
 # marginal_effects(randord.brms) #makes me realize potential weirdness of scaling factor variabes. Better approach?
@@ -663,7 +674,7 @@ points(ord.predict.compare$response, col = "black", type = "l")
 plot(rnorm(nrow(ord.predict.compare),0,.5) + (ord.predict.compare$predict.brms - ord.predict.compare$response)[order(ord.predict.compare$predict.brms)], pch = ".")
 
 # in ggplot ----
-cowplot::plot_grid(
+plot_grid(
 ggplot(ord.predict.compare) + 
   geom_hex(aes(x = 1:nrow(ord.predict.compare), y = predict.ord), bins = 10) +
   geom_line(aes(x = 1:nrow(ord.predict.compare), y = response), color = "red", size = 4),
@@ -743,3 +754,21 @@ lm.binary.1 = glm(as.numeric(comfort_rating_3lev) - 1 ~ .,
 
 summary(lm.binary.1)
 
+
+
+#     Ordered logit with person random effects - ordinal package doesn't work (ignore) ####
+
+#library("ordinal")
+
+#d.model.randord =  d.model %>% select(-"comfort_rating") %>% mutate(person_ID = as.factor(d$person_ID))
+#names(d.model.randord)
+
+# randord.prelim = clmm2(comfort_rating_ordered ~ ., random=person_ID, data = d.model.randord)
+
+# doesn't work:
+# (and attempt with binary response got same error)
+# randord.prelim = clmm2(comfort_rating_ordered ~ ., random=person_ID, data = d.model.randord)
+# Error in setStart(rho) : attempt to find suitable starting values failed
+#In addition: Warning messages:
+#  1: glm.fit: algorithm did not converge 
+#2: glm.fit: fitted probabilities numerically 0 or 1 occurred 

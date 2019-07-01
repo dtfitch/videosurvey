@@ -40,7 +40,7 @@ names(d)[(which(names(d) == "video_name")+1):ncol(d)] = paste0(names(d)[(which(n
 #   Remove some redunant vars ----
 d <- d %>% select(-street_divided_ST)
 
-#   Add some 3-level vars ----
+#   Reduce factors for some variables ----
 d <- d %>% 
   mutate(op_like_biking_3lev = factor(unlist(sapply(as.numeric(op_like_biking), condense_ratings, levels = 5)), 
                                       levels = c("negative", "neutral", "positive"), ordered = TRUE)) %>%
@@ -51,6 +51,16 @@ d <- d %>%
 # how many levels in each of the street vars?
 sapply(d %>% select(c("comfort_rating", "video_name", contains("_ST", ignore.case = FALSE))) %>%
          mutate_at(vars(contains("_ST")), as.factor), nlevels)
+
+d$usual_mode_4lev = d$usual_mode
+levels(d$usual_mode_4lev) = c(NA, "Bike", "Public Trans", "Car", "Car", "Bike", "Car", "Other", "Other", "Other", "Car", "Public Trans", "Car", "Other")
+# Other includes motorcycle or scooter, other, skate or skateboard, and walk
+
+d$secondary_mode_BIKE = d$secondary_mode
+levels(d$secondary_mode_BIKE) = c(NA, "Bike", "Not_Bike", "Not_Bike", "Not_Bike", "Bike", "Not_Bike", "Not_Bike", "Not_Bike", "Not_Bike", "Not_Bike")
+
+d$hh_composition_4lev = d$hh_composition
+levels(d$hh_composition_4lev) = c(NA, "Alone only", "Multi", "Multi", "Multi", "Family only", "Roommates etc. only", "Multi")
 
 #   Convert some factors to ordered ----
 

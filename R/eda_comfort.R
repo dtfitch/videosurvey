@@ -152,7 +152,7 @@ plot.ratings.4lane = ggplot(d %>% group_by(video_name) %>%
 
 ggsave("IMG/ratings_video_4lane_dists.png", plot.ratings.4lane, width = 6, height = 12)
 
-ggsave("IMG/ratings_video_char_dists.png", plot_grid(plot.ratings.female, plot.ratings.4lane, align = "h"), width = 15, height = 16)
+ggsave("IMG/ratings_video_char_dists.png", plot_grid(plot.ratings.female, plot.ratings.4lane, align = "h"), width = 15, height = 20)
 
 #Video rating distribution by video and "op_like_biking" (3 levels)
 plot.ratings.lkbike = ggplot(d %>% group_by(video_name) %>% 
@@ -271,7 +271,6 @@ plot.score = ggplot(melt(d.scores %>% select(-c("comfort_rating_3lev", "NCHRP_BL
   theme_bw() +
   ylab("Average comfort rating") +
   xlab("") + 
-  ylim(1,7) +
   scale_y_continuous(breaks = 1:7, limits = c(1,7)) +
   theme(axis.text.x = element_text(family = "Times", size  = 18),
         axis.title.x = element_text(family = "Times", size  = 18),
@@ -281,7 +280,7 @@ plot.score = ggplot(melt(d.scores %>% select(-c("comfort_rating_3lev", "NCHRP_BL
         title = element_text(family = "Times", size  = 18, face = "plain")) +
   ggtitle("Average Rating from Survey verus External Score of Streets")
 
-ggsave(filename = "IMG/ratings_vs_scores.png", plot.score, height = 6)
+ggsave(filename = "IMG/ratings_vs_scores.png", plot.score, height = 5)
 
 # distributions with mean line ch
 ggplot(melt(d.scores %>% select(-c("comfort_rating_3lev", "NCHRP_BLOS_score_ST")), id = c("video_name", "comfort_rating")) %>%
@@ -294,10 +293,11 @@ ggplot(melt(d.scores %>% select(-c("comfort_rating_3lev", "NCHRP_BLOS_score_ST")
         axis.ticks.y = element_blank())
 
 
-plot.score.dists = ggplot(melt(d.scores %>% select(-c("comfort_rating_3lev", "NCHRP_BLOS_score_ST")), id = c("video_name", "comfort_rating")) %>%
+plot.score.dists = ggplot(melt(d.scores %>% select(-c("comfort_rating_3lev", "NCHRP_BLOS_score_ST")), 
+                               id = c("video_name", "comfort_rating")) %>%
          group_by(interaction(value, variable)) %>% mutate(m = mean(comfort_rating))) + 
          geom_density_ridges(aes(x = comfort_rating, y = fct_rev(interaction(value, variable)), 
-               fill = variable), bandwidth = .6, color = "darkgray") + 
+               fill = variable), bandwidth = .6, color = "black") + 
   scale_x_continuous(breaks = 1:7, limits = c(1,7)) +
   scale_fill_discrete(name = "Score") +
   scale_y_discrete(labels = rev(c(rep(LETTERS[1:5], 3)[1:14]))) + 
@@ -312,3 +312,4 @@ plot.score.dists = ggplot(melt(d.scores %>% select(-c("comfort_rating_3lev", "NC
         title = element_text(family = "Times", size  = 18, face = "plain"))
 
 ggsave(filename = "IMG/ratings_vs_scores_joy.png", plot.score.dists, width = 6, height = 6)
+

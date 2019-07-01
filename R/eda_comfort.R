@@ -43,10 +43,10 @@ plot.primary.role = plot.template.2 +
   geom_bar(aes(x = as.factor(primary_role))) +
   scale_x_discrete(labels = c("Faculty", "Grad. Student", "Staff", "Undergraduate", #undergrad incl. Post-Bac)
                               "Visiting Scholar")) +
-  ggtitle("Age (N = 14777)")
+  ggtitle("Primary Role (N = 15288)")
 
 plot.age = plot.template.2 + geom_bar(aes(x = age)) +
-  ggtitle("Primary Role (N = 15288)")
+  ggtitle("Age (N = 14777)")
 
 plot.usual.mode = plot.template.2 + 
   geom_bar(aes(x = as.numeric(usual_mode_4lev))) +
@@ -79,12 +79,24 @@ hist(d.video$mean_comfort, breaks = 20, xlab = "mean rating", main = "Distributi
 hist(d.video$median_comfort, breaks = 20, xlab = "median rating", main = "Distribution of median video ratings")
 dev.off()
 
-plot.med.ratings = plot.template.3 + 
-  geom_histogram(aes(x = factor(median_comfort, levels = 1:7), fill = median_comfort), stat = "count", show.legend = F) +
+plot.ratings.discrete = plot.template.2 + 
+  geom_histogram(aes(x = comfort_rating, fill = comfort_rating), color = "black", stat = "count", show.legend = F) +
+  scale_fill_brewer(direction = 1) +
   scale_x_discrete(drop=FALSE, labels = levels(d$comfort_rating)) + 
-  ggtitle("Distribution of median comfort rating of videos (streets)")
+  ggtitle("Distribution of all comfort rating of streets")
+plot.ratings.discrete
 
-ggsave("IMG/median_ratings.png", plot.med.ratings, width = 6, height = 4)
+plot.med.ratings = plot.template.3 + 
+  geom_histogram(aes(x = factor(median_comfort, levels = 1:7), color = I("black"), 
+                     fill = factor(median_comfort, levels = 1:7)), 
+                 stat = "count", show.legend = F) +
+  scale_fill_brewer(direction = -1) +
+  scale_x_discrete(drop=FALSE, labels = levels(d$comfort_rating)) + 
+  ggtitle("Distribution of median comfort rating of streets")
+
+ggsave("IMG/overall_ratings.png", plot_grid(plot.ratings.discrete, plot.med.ratings, align = "h", nrow = 1), width = 12)
+
+
 
 #   By video ratings distribution ----
 
@@ -258,14 +270,16 @@ d %>% group_by(bike_lane_ST, op_like_biking_3lev) %>%
 
 # 5. Comparing ratings to "scores" ----
 
-d.scores = d %>% select(matches("NCHRP|HCM|LTS|rating|video_name")) %>% mutate_if(is.ordered, as.numeric) 
+d.scores = melt(d %>% select(matches("NCHRP|HCM|LTS|rating|video_name")) %>% mutate_if(is.ordered, as.numeric) %>%
+                  select(-c("comfort_rating_3lev", "NCHRP_BLOS_score_ST")) %>%
+                  mutate(NCHRP_BLOS_ST = 6 - NCHRP_BLOS_ST,
+                         HCM_BLOS_ST = 6 - HCM_BLOS_ST),
+                id = c("video_name", "comfort_rating")) %>%
+  mutate(value = recode(value, "1" = "A", "2" = "B", "3" = "C", "4" = "D", "5" = "E")) %>% 
+  group_by(interaction(value, variable))
 
 # line plot
-plot.score = ggplot(melt(d.scores %>% select(-c("comfort_rating_3lev", "NCHRP_BLOS_score_ST")), 
-                         id = c("video_name", "comfort_rating")) %>%
-                      mutate(value = recode(value, "1" = "A", "2" = "B", "3" = "C", "4" = "D")) %>% #for LTS stress level
-                      group_by(interaction(value, variable)) %>% 
-                      summarize(x = as.factor(first(value)), Score = first(variable), m = mean(comfort_rating))) + 
+plot.score = ggplot(d.scores %>% summarize(x = as.factor(first(value)), Score = first(variable), m = mean(comfort_rating))) + 
   geom_point(aes(y = m, x = fct_rev(x), group = Score, color = Score)) +
   geom_line(aes(y = m, x = fct_rev(x), group = Score, color = Score)) +
   theme_bw() +
@@ -283,8 +297,7 @@ plot.score = ggplot(melt(d.scores %>% select(-c("comfort_rating_3lev", "NCHRP_BL
 ggsave(filename = "IMG/ratings_vs_scores.png", plot.score, height = 5)
 
 # distributions with mean line ch
-ggplot(melt(d.scores %>% select(-c("comfort_rating_3lev", "NCHRP_BLOS_score_ST")), id = c("video_name", "comfort_rating")) %>%
-         group_by(interaction(value, variable)) %>% mutate(m = mean(comfort_rating))) + 
+ggplot(d.scores %>% mutate(m = mean(comfort_rating))) + 
   geom_density(aes(x = comfort_rating, fill = variable, color = variable), bw = .6) + 
   facet_wrap(~interaction(value, variable), scales = "free_y", ncol = 1)  +
   geom_vline(aes(xintercept = m), col = "red") + 
@@ -293,9 +306,7 @@ ggplot(melt(d.scores %>% select(-c("comfort_rating_3lev", "NCHRP_BLOS_score_ST")
         axis.ticks.y = element_blank())
 
 
-plot.score.dists = ggplot(melt(d.scores %>% select(-c("comfort_rating_3lev", "NCHRP_BLOS_score_ST")), 
-                               id = c("video_name", "comfort_rating")) %>%
-         group_by(interaction(value, variable)) %>% mutate(m = mean(comfort_rating))) + 
+plot.score.dists = ggplot(d.scores %>% mutate(m = mean(comfort_rating))) + 
          geom_density_ridges(aes(x = comfort_rating, y = fct_rev(interaction(value, variable)), 
                fill = variable), bandwidth = .6, color = "black") + 
   scale_x_continuous(breaks = 1:7, limits = c(1,7)) +

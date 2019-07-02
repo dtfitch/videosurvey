@@ -31,6 +31,9 @@ condense_ratings = function(x, levels) {
 # 1. Load Data ----
 
 d <- readRDS("video_survey_data_long.RDS") 
+d.block <-read.csv("VideoBlocks_LUT.csv", stringsAsFactors = F)
+# Variables added to the data later (bike boulevard is for internal tracking, won't be used):
+d = left_join(d, d.block[,c("ID", "bike_operating_space", "bike_boulevard")], by = "ID") 
 d.meta <- read.csv("Metadata_video_survey_data_long.csv")
 
 # 2. Some Variable Clean + Transformation
@@ -61,6 +64,9 @@ levels(d$secondary_mode_BIKE) = c(NA, "Bike", "Not_Bike", "Not_Bike", "Not_Bike"
 
 d$hh_composition_4lev = d$hh_composition
 levels(d$hh_composition_4lev) = c(NA, "Alone only", "Multi", "Multi", "Multi", "Family only", "Roommates etc. only", "Multi")
+
+#25, 30 & 35, 45 & 50
+d$speed_limit_mph_ST_3lev = cut(d$speed_limit_mph_ST, breaks = c(25, 30, 40, 50), include.lowest = TRUE, right = FALSE) 
 
 #   Convert some factors to ordered ----
 

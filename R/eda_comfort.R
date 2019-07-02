@@ -20,35 +20,52 @@ library(reshape2)
 
 setwd("~/Documents/videosurvey/")
 
-# 1. Load data ----
+# Load data ---
 source("R/data_comfort.R")
 
-# 2. Sample characteristics (minimal) ####
+#    plot themes ----
 
-plot.template.2 = ggplot(data = d) +  
-      xlab(label = "") +
-      theme( axis.text.x = element_text(angle = 45, hjust = 1, family = "Times", size  = 10),
-        axis.title.x = element_text(family = "Times", size  = 10),
-        axis.text.y = element_text(family = "Times", size  = 10),
-        axis.title.y = element_text(family = "Times", size  = 10),
-        title = element_text(family = "Times New Roman", size  = 10, face = "plain"))
+theme1 <- theme( axis.text.x = element_text(angle = 45, hjust = 1, family = "Times", size  = 10),
+                 axis.title.x = element_text(family = "Times", size  = 10),
+                 axis.text.y = element_text(family = "Times", size  = 10),
+                 axis.title.y = element_text(family = "Times", size  = 10),
+                 title = element_text(family = "Times New Roman", size  = 10, face = "plain"))
 
-plot.gender = plot.template.2 + 
+theme2 = theme( axis.text.x = element_text( family = "Times", size  = 14),
+                axis.title.x = element_text(family = "Times", size  = 16),
+                axis.text.y = element_blank(),
+                axis.ticks.y = element_blank(),
+                axis.title.y = element_text(family = "Times", size  = 16),
+                title = element_text(family = "Times", size  = 16, face = "plain"),
+                strip.text = element_text(family = "Times", size  = 16),
+                legend.position = "top",
+                legend.text = element_text(family = "Times", size  = 16),
+                legend.title = element_blank())
+
+theme3 = theme(axis.text.x = element_text(family = "Times", size  = 18),
+               axis.title.x = element_text(family = "Times", size  = 18),
+               axis.text.y = element_text(family = "Times", size  = 18),
+               axis.title.y = element_text(family = "Times", size  = 18),
+               legend.text = element_text(family = "Times", size  = 18),
+               title = element_text(family = "Times", size  = 18, face = "plain"))
+
+# 1. Sample characteristics (minimal) ####
+plot.gender = ggplot(data = d) + theme1 +
   geom_bar(aes(x = as.factor(female))) + 
   xlab(label = "") + 
   scale_x_discrete(labels = c("Male", "Female", "NA")) +
   ggtitle("Gender (N = 15114)")
 
-plot.primary.role = plot.template.2 + 
+plot.primary.role = ggplot(data = d) + theme1 +
   geom_bar(aes(x = as.factor(primary_role))) +
   scale_x_discrete(labels = c("Faculty", "Grad. Student", "Staff", "Undergraduate", #undergrad incl. Post-Bac)
                               "Visiting Scholar")) +
   ggtitle("Primary Role (N = 15288)")
 
-plot.age = plot.template.2 + geom_bar(aes(x = age)) +
+plot.age = ggplot(data = d) + theme1 + geom_bar(aes(x = age)) +
   ggtitle("Age (N = 14777)")
 
-plot.usual.mode = plot.template.2 + 
+plot.usual.mode = ggplot(data = d) + theme1 + 
   geom_bar(aes(x = as.numeric(usual_mode_4lev))) +
   scale_x_continuous(breaks = 1:4, labels = levels(d$usual_mode_4lev)) +
   ggtitle("Usual Mode (N = 15283)")
@@ -57,17 +74,9 @@ ggsave("IMG/survey_char.png", plot_grid(plot.gender, plot.age,
                                         plot.primary.role, plot.usual.mode, 
                                         align = "h"), width = 6, height = 6)
 
-# 3. Explore video ratings distributions ----
+# 2. Explore video ratings distributions ----
 
 # There seems to be high-comfort and low-comfort streets
-
-plot.template.3 = ggplot(data = d.video) +  
-  xlab(label = "") +
-  theme( axis.text.x = element_text(angle = 45, hjust = 1, family = "Times", size  = 12),
-         axis.title.x = element_text(family = "Times", size  = 12),
-         axis.text.y = element_text(family = "Times", size  = 12),
-         axis.title.y = element_text(family = "Times", size  = 12),
-         title = element_text(family = "Times", size  = 12, face = "plain"))
 
 #   Overall ratings distribution ----
 
@@ -79,18 +88,20 @@ hist(d.video$mean_comfort, breaks = 20, xlab = "mean rating", main = "Distributi
 hist(d.video$median_comfort, breaks = 20, xlab = "median rating", main = "Distribution of median video ratings")
 dev.off()
 
-plot.ratings.discrete = plot.template.2 + 
+plot.ratings.discrete =  ggplot(data = d) +  xlab(label = "") + theme2 + 
   geom_histogram(aes(x = comfort_rating, fill = comfort_rating), color = "black", stat = "count", show.legend = F) +
   scale_fill_brewer(direction = 1) +
+  theme( axis.text.x = element_text(angle = 45, hjust = 1, family = "Times", size  = 16)) +
   scale_x_discrete(drop=FALSE, labels = levels(d$comfort_rating)) + 
   ggtitle("Distribution of all comfort rating of streets")
 plot.ratings.discrete
 
-plot.med.ratings = plot.template.3 + 
+plot.med.ratings = ggplot(data = d.video) +  xlab(label = "") + theme2 + 
   geom_histogram(aes(x = factor(median_comfort, levels = 1:7), color = I("black"), 
                      fill = factor(median_comfort, levels = 1:7)), 
                  stat = "count", show.legend = F) +
-  scale_fill_brewer(direction = -1) +
+  scale_fill_brewer(direction = 1) +
+  theme( axis.text.x = element_text(angle = 45, hjust = 1, family = "Times", size  = 16)) +
   scale_x_discrete(drop=FALSE, labels = levels(d$comfort_rating)) + 
   ggtitle("Distribution of median comfort rating of streets")
 
@@ -106,11 +117,7 @@ plot.ratings = ggplot(d.tmp, aes(x = comfort_rating, y = fct_reorder(video_name,
                                  group = video_name, fill = as.factor(female))) +
   stat_density_ridges(geom = "density_ridges_gradient", bandwidth = .5) +
   xlab("") + ylab("") + 
-  theme( axis.text.x = element_text(angle = 45, hjust = 1, family = "Times", size  = 10),
-         axis.title.x = element_text(family = "Times", size  = 10),
-         axis.text.y = element_text(family = "Times", size  = 10),
-         axis.title.y = element_text(family = "Times", size  = 10),
-         title = element_text(family = "Times", size  = 10, face = "plain"))
+  theme1
 
 ggsave("IMG/ratings_video_dists.png", plot.ratings, width = 4, height = 8)
 
@@ -185,8 +192,23 @@ ggsave("IMG/ratings_video_lkbike_dists.png", plot.ratings.lkbike, width = 7, hei
 
 #also tried: Video rating distribution by video and "usual_mode =="Bike " (3 levels)
 
-# 4. Explore independent variables  ----
+#   Four lane comfort opinion vs. ratings ----
+#  Compare distribution of ratings on four-lane road to comfort on four-lane road (as text vs. video clip) -- filter by 4 lanes and no bike lane. (SanPablo_GilmanHarrison, SanPablo_CedarVirginia)
 
+plot.comfort = filter(d, num_lanes_ST == 4, bike_lane_ST==0) %>% 
+  group_by(video_name) %>% filter(!is.na(comfort_four_no_lane)) %>%
+  ggplot(aes(fill = comfort_rating, x = comfort_four_no_lane)) + 
+  geom_bar(position = "dodge", color = "black", size = .3) +
+  xlab("Comfort bicycling on a four lane road with no bike lane") + theme1 +
+  scale_fill_brewer(direction = -1, name = "") +
+  theme2 + 
+  theme(axis.text.x = element_text(angle = 0, hjust = .5),
+        legend.position = "top")
+  
+ggsave("IMG/plot_comfort.png", plot.comfort, width = 12)
+
+
+# 3. Explore independent variables  ----
 # Plot video score against all variables
 
 ## Probably important varaibles based on next plots ##
@@ -200,7 +222,7 @@ ggsave("IMG/ratings_video_lkbike_dists.png", plot.ratings.lkbike, width = 7, hei
 d.video.melt = d %>% select(c("comfort_rating", "video_name", contains("_ST", ignore.case = FALSE))) %>%
   mutate_if(is.factor, list(as.numeric)) %>%
   mutate(comfort_rating = d$comfort_rating) %>% #actually don't want this one numeric
-  select(-c("NCHRP_BLOS_score_ST", "veh_volume_ST")) %>% #remove near duplicats
+  select(-c("NCHRP_BLOS_score_ST", "veh_volume_ST", "speed_limit_mph_ST_3lev")) %>% #remove near duplicats
   melt(id = c("video_name", "comfort_rating")) %>%
   group_by(value, variable, comfort_rating) %>%
   summarize(count = n())
@@ -211,16 +233,7 @@ plot.allvar = ggplot(d.video.melt, aes(x = reorder(as.factor(value), sort(value)
   facet_wrap(~variable, scales = "free", ncol = 4) +
   theme_bw() + 
   xlab("") +
-  theme( axis.text.x = element_text( family = "Times", size  = 14),
-         axis.title.x = element_text(family = "Times", size  = 16),
-         axis.text.y = element_blank(),
-         axis.ticks.y = element_blank(),
-         axis.title.y = element_text(family = "Times", size  = 16),
-         title = element_text(family = "Times", size  = 16, face = "plain"),
-         strip.text = element_text(family = "Times", size  = 16),
-         legend.position = "top",
-         legend.text = element_text(family = "Times", size  = 16),
-         legend.title = element_blank())
+  theme2
 
 ggsave("IMG/ratings_by_variable.png", plot.allvar, width = 12, height = 18)
 
@@ -229,15 +242,16 @@ d.video.melt3 = d.video.melt %>% mutate(comfort_rating_3lev = as.factor(sapply(a
   filter(comfort_rating_3lev != "neutral" & !is.na(comfort_rating_3lev)) %>%
   group_by(comfort_rating_3lev, variable, value) %>% summarize(count = sum(count))
 
-ggplot(d.video.melt3 %>% group_by(variable), aes(x = reorder(as.factor(value), rank(value)), y = count, fill = as.factor(comfort_rating_3lev))) +
+plot.allvar.binary = ggplot(d.video.melt3 %>% group_by(variable), aes(x = reorder(as.factor(value), 
+                        rank(value)), y = count, fill = as.factor(comfort_rating_3lev))) +
   scale_fill_manual(values = rainbow(3, alpha = .7)) + 
   geom_bar(stat = "identity", position = "dodge", color = "black", lwd = .2) +
-  facet_wrap(~variable, scales = "free") +
+  facet_wrap(~variable, scales = "free", ncol = 4) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-  theme_bw() + xlab("")
+  theme_bw() + xlab("") +
+  theme2
 
-ggsave("IMG/ratings_binary_by_variable.png", width = 18, height = 9)
-
+ggsave("IMG/ratings_binary_by_variable.png",  plot.allvar.binary, width = 12, height = 18)
 
 
 #    Explore type of effects (additive vs. multiplicative) ----
@@ -268,7 +282,7 @@ d %>% group_by(bike_lane_ST, op_like_biking_3lev) %>%
   scale_color_manual(values = c("red", "green")) + coord_flip()
 
 
-# 5. Comparing ratings to "scores" ----
+# 4. Comparing ratings to "scores" ----
 
 d.scores = melt(d %>% select(matches("NCHRP|HCM|LTS|rating|video_name")) %>% mutate_if(is.ordered, as.numeric) %>%
                   select(-c("comfort_rating_3lev", "NCHRP_BLOS_score_ST")) %>%
@@ -286,13 +300,8 @@ plot.score = ggplot(d.scores %>% summarize(x = as.factor(first(value)), Score = 
   ylab("Average comfort rating") +
   xlab("") + 
   scale_y_continuous(breaks = 1:7, limits = c(1,7)) +
-  theme(axis.text.x = element_text(family = "Times", size  = 18),
-        axis.title.x = element_text(family = "Times", size  = 18),
-        axis.text.y = element_text(family = "Times", size  = 18),
-        axis.title.y = element_text(family = "Times", size  = 18),
-        legend.text = element_text(family = "Times", size  = 18),
-        title = element_text(family = "Times", size  = 18, face = "plain")) +
-  ggtitle("Average Rating from Survey verus External Score of Streets")
+  theme3 +
+  ggtitle("Average Rating from Survey versus External Score of Streets")
 
 ggsave(filename = "IMG/ratings_vs_scores.png", plot.score, height = 5)
 
@@ -315,12 +324,8 @@ plot.score.dists = ggplot(d.scores %>% mutate(m = mean(comfort_rating))) +
   xlab("comfort rating") +
   ylab("") +
   theme_bw() +
-  theme(axis.text.x = element_text(family = "Times", size  = 18),
-        axis.title.x = element_text(family = "Times", size  = 18),
-        axis.text.y = element_text(family = "Times", size  = 18),
-        axis.title.y = element_text(family = "Times", size  = 18),
-        legend.text = element_text(family = "Times", size  = 18),
-        title = element_text(family = "Times", size  = 18, face = "plain"))
+  theme3 +
+  theme(axis.text.y = element_text(vjust = -.1))
 
 ggsave(filename = "IMG/ratings_vs_scores_joy.png", plot.score.dists, width = 6, height = 6)
 

@@ -2,23 +2,19 @@
 # Jane Carlen, May 2019
 # -----------------------------------------------------------------------------------
 #
-# Questions:
-# - Still need to figure out the best way to express lane width
+# Questions: ----
 # - How could table(d$bike_speed_mph_ST) get to 51 and 61 mph? e.g. https://youtu.be/OpZ-zH7HD6o
 # - Levels: L, Q, C, 4 ??
 #
 #
-# To do:
+# To do: ----
 # - random effects in ordered logit
 #     - do we want a stronger prior? Is additive correct?
 #     - consider category-speciric effects for any terms? (see brms JSS paper)
-#     - revisit scaling method 
 # - horeshoe prior on model terms? (like penalized)
 # - linear vs non.linear effects of variables? What I'm seeing with interactions may indicate transformations needed.
 #
-# - compare distribution of ratings on four-lane road to comfort on four-lane road (as text vs. video clip) -- filter by 4 lanes and no bike lane. (SanPablo_GilmanHarrison, SanPablo_CedarVirginia)
 # - try a "kid 17 or under" treating NA as no kids and see if any effect
-# - add random effect for video to brm
 # - FINAL BIKEWAY WIDTH: parking + bike lane + buffer + operating space (bike lane width + shoulder space not taken by parking)
 # speed limit groups = 25,  30 - 35, 45-50 (chosed based on speed group and where their prevailing speeds seem to be)
 # don't include prevail either on it's own or as a difference with speed
@@ -27,10 +23,9 @@
     # might be individative how much vehicle traffic and how fast they're going
 # ONE MODEL with individual and video-level features
   # counterfactual prediction to show those differences
-  
+# - add random effect for video to brm
 
-
-# Notes:
+# Notes: ----
 #     1. So far nothing major has come from looking at interaction effects. What I'm seeing may indicate that the effects of opinion variables are non-linear (if still treating that as numeric, not as factors)
 #     2. Removed housing cost as a variable because it has a fairly large amount of missing data, 
 #       has some significant outliers and potentially bad data (undergrads paying 5000/month in davis>)
@@ -43,7 +38,10 @@
 #       For exploring imputations and brms used character "NA" factor level for those entries, akin to "other"
 #       Excluding other NAs in bayesian model for now so I can treat opinion variables as numeric (for convencience)
 #         Not sure how to integrate "NA" level into ordered scale otherwise
-#       
+#     5. Dillon: added two new variables:
+#       (1) "bike_boulevard" just to keep track of it (we won't use it)
+#       (2)  "bike_operating_space" the key measurement variable to use
+#       The trick with bike_operating_space is that the effect should be non-linear. For example, on a slow speed mixed traffic (bike and cars in same lane), operating space will be 0, but the road is likely to be relatively comfortable compared to a major arterial. However, when traffic speeds and volumes are high, more operating space should equal more comfort. Does that make sense? So i guess what I'm saying is I expect an interaction between operating space and our new speed limit variable. 
 
 # 0. Setup ####
 
@@ -197,8 +195,6 @@ d %>% group_by(video_name) %>% summarize_all(first) %>% select(matches("lane|pro
 
 d$speed_prevail_minus_limit_ST = d$prevailing_speed_mph_ST - d$speed_limit_mph_ST
 
-d$shoulder_minus_bikeway_ft_ST = d$shoulder_width_ft_ST- d$bikeway_width_ft_ST
-
 #   Make new d.model for modeling ----
 
 d.model = d %>% select(-c("cts_ID", "ID", "URL",
@@ -217,15 +213,19 @@ d.model = d %>% select(-c("cts_ID", "ID", "URL",
   select(-c("bike_lane_blocked_ST")) %>%
   # removed bike_speed_mph_ST bc of data quality question (see top)
   select(-c("bike_speed_mph_ST")) %>%
+  # bike_operating_space_ST is just a tracking variable
+  select(-c("bike_operating_space_ST")) %>%
   # Removed in favor of other version or similar var
-  select(-contains("_3lev", ignore.case = FALSE)) %>%
-  select(-c("monthly_housing_cost", "veh_volume_ST", #<- used veh_volume2_ST instead, more precise
+  select(-c("op_like_biking_3lev", "comfort_rating_3lev",
+            "monthly_housing_cost", "veh_volume_ST", #<- used veh_volume2_ST instead, more precise
             "NCHRP_BLOS_ST", "HCM_BLOS_ST",
-            "usual_mode", "prevailing_speed_mph_ST", #<- used prevail - speed instead to reduce correlation
+            "usual_mode", "prevailing_speed_mph_ST", #<- used prevail - speed instead to reduce correlation          #correlated with bike_lane_SUM_ST:
+            "bike_lane_and_parking_lane_width_ft_ST",  "bikeway_width_ft_ST", "shoulder_width_ft_ST",
+            "speed_limit_mph_ST", #use 3lev instead
             #in bike_lane_SUM_ST
-            "bike_lane_ST", "protected_ST", "buffer_ST", 
-            #in shoulder_minus_bikeway_ft_ST
-            "shoulder_minus_bikeway_ft_ST", #decided to keep "shoulder_width_ft_ST" for added explanatory power
+            "bike_lane_ST", "protected_ST", "buffer_ST",
+            # tracking variable, not complete
+            "bike_boulevard_ST",
             # tried just secondary mode is BIKE instead
             "secondary_mode")) %>%
   #removecomposite street vars while examining street factors
@@ -240,15 +240,14 @@ d.model = d %>% select(-c("cts_ID", "ID", "URL",
   select(-c("distance", "op_smartphone", "license")) %>%
   # removed after preliminary models and no strong reason to keep them (may add vack in later)
   select(-c(#"divided_road_ST",
-            "op_eco_concern", "bike_access", "op_travel_wasted", "op_like_driving",
+            "op_eco_concern", "bike_access", 
+            "op_travel_wasted", "op_like_driving",
             "op_schedule_transit", "op_limit_driving", "op_need_own_car",
             "op_LIKE_COMMUTE_SUM", "secondary_mode_BIKE",
             "op_bike_often", # mostly captured by bike commuting
-            "rent_share", "hh_composition_4lev",
+            "hh_composition_4lev",
             "urban_ST",
-            #strongly correlated with bike_lane_SUM_ST:
-            "bike_lane_and_parking_lane_width_ft_ST", 
-            "bikeway_width_ft_ST")) %>%
+            "rent_share")) %>%
   # make orderd vars numeric to reduce variables in model (can revert or re-bin if very non-linear)
   mutate_if(is.ordered, as.numeric) %>%
   mutate(comfort_rating_ordered = d$comfort_rating) #Outcome as a factor
@@ -267,19 +266,22 @@ names(d.model)
 #     Even the model with all three scores (8 predictors), does only slightly better than the bike lane model with only two predictors, and if we add speed limit to the bike lane model (still only 3 predictors) it outperforms the mdoel with all three scores
 
 #Null model:
-summary(MASS::polr(as.ordered(comfort_rating) ~ 1, data = d.scores, Hess = TRUE)) #Residual Deviance: 58676.76 
+summary(MASS::polr(as.ordered(comfort_rating) ~ 1, data = d, Hess = TRUE)) #Residual Deviance: 58676.76 
 
 #Score models:
-summary(MASS::polr(as.ordered(comfort_rating) ~ NCHRP_BLOS_score_ST, data = d.scores, Hess = TRUE)) # Residual Deviance: 58367.77 
-summary(MASS::polr(as.ordered(comfort_rating) ~ as.factor(HCM_BLOS_ST), data = d.scores, Hess = TRUE)) #Residual Deviance: 57619.62
-summary(MASS::polr(as.ordered(comfort_rating) ~ as.factor(LTS_ST), data = d.scores, Hess = TRUE)) #Residual Deviance: 57811.67 
+summary(MASS::polr(as.ordered(comfort_rating) ~ NCHRP_BLOS_score_ST, data = d, Hess = TRUE)) # Residual Deviance: 58367.77 
+summary(MASS::polr(as.ordered(comfort_rating) ~ as.factor(HCM_BLOS_ST), data = d, Hess = TRUE)) #Residual Deviance: 57619.62
+summary(MASS::polr(as.ordered(comfort_rating) ~ as.factor(LTS_ST), data = d, Hess = TRUE)) #Residual Deviance: 57811.67 
 summary(MASS::polr(as.ordered(comfort_rating) ~  as.factor(LTS_ST) + as.factor(HCM_BLOS_ST) + 
-                     NCHRP_BLOS_score_ST, data = d.scores, Hess = TRUE)) #Residual Deviance: 56703.81 
-summary(MASS::polr(as.ordered(comfort_rating) ~ as.factor(video_name), data = d.scores, Hess = TRUE)) #55252.60
+                     NCHRP_BLOS_score_ST, data = d, Hess = TRUE)) #Residual Deviance: 56703.81 
+#By Video
+summary(MASS::polr(as.ordered(comfort_rating) ~ as.factor(video_name), data = d, Hess = TRUE)) #55252.60
 
 # Bike lane models:
-summary(MASS::polr(as.ordered(comfort_rating) ~ as.factor(d.model$bike_lane_SUM_ST), data = d.scores, Hess = TRUE)) #Residual Deviance: 56876.68 
-summary(MASS::polr(as.ordered(comfort_rating) ~ d.model$speed_limit_mph_ST + as.factor(d.model$bike_lane_SUM_ST), data = d.scores, Hess = TRUE)) #Residual Deviance: 56363.20 
+summary(MASS::polr(as.ordered(comfort_rating) ~ as.factor(d.model$bike_lane_SUM_ST), 
+                   data = d, Hess = TRUE)) #Residual Deviance: 56876.68 
+summary(MASS::polr(as.ordered(comfort_rating) ~ d.model$speed_limit_mph_ST_3lev + 
+                     as.factor(d.model$bike_lane_SUM_ST), data = d, Hess = TRUE)) #Residual Deviance: 56260.20 
 
 # see "Models with only street features" for expansion of this 
                                       
@@ -292,19 +294,20 @@ summary(MASS::polr(as.ordered(comfort_rating) ~ d.model$speed_limit_mph_ST + as.
 lm.video_name = lm(as.numeric(comfort_rating) ~ video_name, data = d)
 summary(lm.video_name)
 
-# Model from features (far fewer variables than above, only 3% loss in R-squared, and coef make sense)
+# Model from features (far fewer variables than above, only 2% loss in R-squared, and coef make sense)
 d.model.street = d %>% select(matches("ST|comfort_rating", ignore.case = FALSE)) %>%
   #remove some vars strongly correlated with others
   select(-c("veh_volume_ST", "comfort_rating_3lev","NCHRP_BLOS_score_ST", #lower score -> A
-            #"prevailing_speed_mph_ST",
-            "speed_prevail_minus_limit_ST", "speed_limit_mph_ST",
+            "prevailing_speed_mph_ST",
+            #"speed_prevail_minus_limit_ST",
+            "speed_limit_mph_ST", # use prevailing speed here bc more efficient than these two speed vars, but we'll use speed categories in final models bc can be more consistently applied out of our sampel, better for planning purposes.
             "bike_speed_mph_ST",
             "bike_lane_and_parking_lane_width_ft_ST",
             #"shoulder_width_ft_ST",
-            "shoulder_minus_bikeway_ft_ST", 
             "bike_lane_ST",
             "outside_lane_width_ft_ST",
             #bike_lane_SUM_ST"
+            "bike_boulevard_ST", #tracking variable, not for use
             "HCM_BLOS_ST", "LTS_ST", 
             "NCHRP_BLOS_ST",
             "bikeway_width_ft_ST",
@@ -314,7 +317,9 @@ d.model.street = d %>% select(matches("ST|comfort_rating", ignore.case = FALSE))
             "buffer_ST", 
             "bike_lane_blocked_ST")) 
 
-lm.street = lm(as.numeric(comfort_rating) ~ ., data = d.model.street)
+lm.street = lm(as.numeric(comfort_rating) ~ . + 
+                 bike_operating_space_ST*speed_limit_mph_ST_3lev,
+               data = d.model.street)
 summary(lm.street) 
 apply(cor(model.matrix(lm.street)), 2, function(x) {max(abs(x[x!=1]), na.rm = T)})
 plot(predict(lm.street), predict(lm.video_name)); abline(a=0,b=1)
@@ -390,19 +395,26 @@ rpart.plot(tree.prelim, digits = 1, cex = .6, type = 3)
 #     - Numeric response with interactions (don't use) ----
 
 # Consider all interaction for top effects from penalized model
-top.lm = lm(as.numeric(model.frame(ord.prelim)$comfort_rating_ordered) ~ .*. -
-              bike_lane_SUM_ST1:bike_lane_SUM_ST2 ,
-            data = data.frame(model.matrix(ord.prelim)[,-1])[,top.names])
+top.lm = lm(as.numeric(model.frame(ord.prelim)$comfort_rating_ordered) ~ .*(. - bike_lane_SUM_ST2),
+            data = data.frame(model.matrix(ord.prelim)[,-1][,top.names]))
 summary(top.lm)
 
 # Consider specific interactions
-lm.prelim.int = lm(comfort_rating ~ . +
+lm.prelim.int = lm(comfort_rating ~ . + 
+                     speed_limit_mph_ST_3lev:bike_lane_SUM_ST +
+                     comfort_four_no_lane:bike_lane_SUM_ST +
+                     female:comfort_four_no_lane +
+                     female:street_parking_ST +
                      # potential interactions
                      op_like_biking:bike_lane_SUM_ST + 
+                     op_feel_safe:bike_lane_SUM_ST + 
                      bike_ability:comfort_four_no_lane +
-                     comfort_four_no_lane:shoulder_width_ft_ST  +
+                     bike_ability:bike_lane_SUM_ST + 
+                     bike_ability:veh_volume2_ST +
+                     street_parking_ST:veh_volume2_ST  +
+                     street_parking_ST:bike_lane_SUM_ST  +
                      female:op_travel_stress, 
-                   data = d.model %>% 
+                  data = d.model %>% 
                      select(-c("comfort_rating_ordered", "person_ID")))
 summary(lm.prelim.int)
 
@@ -412,8 +424,18 @@ summary(lm.prelim.int)
 
 ord.prelim.int = MASS::polr(comfort_rating_ordered ~ . + 
                           # potential interactions
+                            speed_limit_mph_ST_3lev:bike_lane_SUM_ST +
+                            comfort_four_no_lane:bike_lane_SUM_ST +
+                            female:comfort_four_no_lane +
+                            female:street_parking_ST +
                             op_like_biking:bike_lane_SUM_ST + 
-                            bike_ability:comfort_four_no_lane, 
+                            op_feel_safe:bike_lane_SUM_ST + 
+                            bike_ability:comfort_four_no_lane +
+                            bike_ability:bike_lane_SUM_ST + 
+                            bike_ability:veh_volume2_ST +
+                            street_parking_ST:veh_volume2_ST  +
+                            street_parking_ST:bike_lane_SUM_ST  +
+                            female:op_travel_stress, 
                             # + comfort_four_no_lane:shoulder_width_ft_ST + female:op_travel_stress,
                    data = d.model.ord %>% select(-c("num_lanes_ST")), Hess = TRUE)
 summary(ord.prelim.int)
@@ -426,7 +448,7 @@ plot.glmnetcr(glmcr.prelim.2) # I manually added a cex.axis = .5 arg
 nonzero.glmnetcr(glmcr.prelim.2, s = 20)$beta
 plot(glmcr.prelim.2$dev.ratio)
 
-# Try More restricted:
+# Try More restricted (better):
 glmcr.prelim.3 = glmnetcr(x = model.matrix(lm.prelim.int)[,-1], 
                           y = model.frame(ord.prelim.int)$comfort_rating_ordered) #use ord for ordered response
 plot.glmnetcr(glmcr.prelim.3) # I manually added a cex.axis = .5 arg
@@ -600,7 +622,7 @@ options(mc.cores=(parallel::detectCores())/3)
 
 d.remodel = d.model %>% 
                 select(-"comfort_rating") %>%
-                select(-"monthly_housing_cost_class", "num_lanes_ST") %>%
+                select(-"monthly_housing_cost_class", "num_lanes_ST", "speed_prevail_minus_limit_ST") %>%
                 #use age_impute instead
                 select(-"age") %>%
                 mutate(person_ID = as.factor(person_ID),
@@ -608,11 +630,10 @@ d.remodel = d.model %>%
                        divided_road_ST = as.factor(divided_road_ST), #trying this as factor since only three levels
                        comfort_four_no_lane = as.factor(comfort_four_no_lane),
                        pavement_condition_ST = as.factor(pavement_condition_ST), #no idea of the units, so treat as factor
-                       street_parking_ST = as.factor(street_parking_ST),
-                       # This follows dillon's suggestion:
-                       speed_prevail_minus_limit_ST = 
-                         as.factor(cut(d.model$speed_prevail_minus_limit_ST, breaks = c(-13,-8, -3, 3, 8)))
-                ) %>%
+                       street_parking_ST = as.factor(street_parking_ST)) %>%
+                      # This follows dillon's suggestion:
+                       #speed = 
+                         #as.factor(cut(d.model$speed_prevail_minus_limit_ST, breaks = c(-13,-8, -3, 3, 8)))
                 #rest of numeric vars get put on 0-1 scale
                 mutate_at(vars(contains("op")), function(x) {x/5}) %>%
                 mutate_at(names(.)[which(sapply(., function(x) {is.numeric(x) && max(x, na.rm = T) > 1}))], 
@@ -631,10 +652,6 @@ sort(colSums(is.na(d.remodel)))
 table(rowSums(is.na(d.person))) #lose 384 rows, or 79 individuals (out of 15288 and 3089 respectively)
 
 #       scaling (put all on 0-1 scale by subtracting min and dividing by max) ---- 
-
-
-
-
 
 #       build and scale model frames: ----
 #         - Inclusive coefficient set: ----
@@ -658,10 +675,7 @@ d.remodel.mat = cbind(
 #   d.remodel.df$comfort_rating_ordered = d.model$comfort_rating_ordered[rowSums(is.na(d.remodel))==0]
 #   d.remodel.df$video_name = d$video_name[rowSums(is.na(d.remodel))==0]
 
- 
- 
- 
- 
+
 #         - Exclusive coefficient set (only top effects from penalized ordinal model): ----
  d.remodel.mat2 = model.matrix(comfort_rating_ordered ~ ., data = d.remodel)
  d.remodel.mat2 = d.remodel.mat2[,colnames(d.remodel.mat2)[sapply(colnames(d.remodel.mat2), grepl, pattern = paste(top.names, collapse = "|"))]]

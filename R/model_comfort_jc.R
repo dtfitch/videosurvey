@@ -10,7 +10,7 @@
 # To do: ----
 # - random effects in ordered logit
 #     - do we want a stronger prior? Is additive correct?
-#     - consider category-speciric effects for any terms? (see brms JSS paper)
+#     - consider category-speciric effects or priors for any terms? (see brms JSS paper)
 # - horeshoe prior on model terms? (like penalized)
 # - linear vs non.linear effects of variables? What I'm seeing with interactions may indicate transformations needed.
 #
@@ -44,7 +44,7 @@
 #       The trick with bike_operating_space is that the effect should be non-linear. For example, on a slow speed mixed traffic (bike and cars in same lane), operating space will be 0, but the road is likely to be relatively comfortable compared to a major arterial. However, when traffic speeds and volumes are high, more operating space should equal more comfort. Does that make sense? So i guess what I'm saying is I expect an interaction between operating space and our new speed limit variable. 
 
 # 0. Setup ####
-
+#   Packages ----
 #library(MASS)
 library(dplyr) # after MASS to use dplyr select
 library(glmnetcr)
@@ -54,6 +54,7 @@ library(ggridges)
 library(shinystan)
 library(cowplot)
 
+#   Other ----
 setwd("~/Documents/videosurvey")
 source("R/data_comfort.R")
 source("R/eda_comfort.R")
@@ -110,7 +111,7 @@ d.demo = d %>% group_by(person_ID) %>% select(-contains("op")) %>%
   select(-c("URL", "comfort_rating_3lev", "person_ID")) %>%
   # second-round removals
   select(-c("edu_self", "child6", "child615", "child1617", "monthly_housing_cost_class", "hh18_older",
-            "usual_mode", "secondary_model"))
+            "usual_mode", "secondary_mode"))
 
 d.demo.model.matrix = model.matrix(comfort_rating ~ . -1, data = d.demo)
 
@@ -166,6 +167,7 @@ table(as.numeric(as.character(d$child1617)), useNA = "always")
 d$child6 = as.numeric(as.character(d$child6))
 d$child615 = as.numeric(as.character(d$child615))
 d$child1617 = as.numeric(as.character(d$child1617))
+d$child_u18 = rowSums(d[,c('child6', 'child615', 'child1617')], na.rm = T) > 0 # treats NAs as zeros  
 
 # [1] "Bike"                                                                               
 # [2] "Bus"                                                                                
@@ -214,7 +216,7 @@ d.model = d %>% select(-c("cts_ID", "ID", "URL",
   # removed bike_speed_mph_ST bc of data quality question (see top)
   select(-c("bike_speed_mph_ST")) %>%
   # bike_operating_space_ST is just a tracking variable
-  select(-c("bike_operating_space_ST")) %>%
+  # select(-c("bike_operating_space_ST")) %>%
   # Removed in favor of other version or similar var
   select(-c("op_like_biking_3lev", "comfort_rating_3lev",
             "monthly_housing_cost", "veh_volume_ST", #<- used veh_volume2_ST instead, more precise
@@ -227,7 +229,9 @@ d.model = d %>% select(-c("cts_ID", "ID", "URL",
             # tracking variable, not complete
             "bike_boulevard_ST",
             # tried just secondary mode is BIKE instead
-            "secondary_mode")) %>%
+            "secondary_mode",
+            # removed because too correlated to age and primary role, and specific to college town
+            "monthly_housing_cost_class")) %>%
   #removecomposite street vars while examining street factors
   select(-c("NCHRP_BLOS_score_ST", "LTS_ST")) %>%
   # Summed variables describing liking commute instead
@@ -250,15 +254,141 @@ d.model = d %>% select(-c("cts_ID", "ID", "URL",
             "rent_share")) %>%
   # make orderd vars numeric to reduce variables in model (can revert or re-bin if very non-linear)
   mutate_if(is.ordered, as.numeric) %>%
-  mutate(comfort_rating_ordered = d$comfort_rating) #Outcome as a factor
+  mutate(comfort_rating_ordered = d$comfort_rating)
 
 names(d.model)
 
+# ----------------------------------------------------------------------------------
+# 3  Missing Data (age) ----
+#   Data set (by person) of person-level variables for potential imputation & filtering ----
+
+d.person = d %>% 
+  dplyr::select(-contains("ST", ignore.case = FALSE)) %>%
+  dplyr::select(-contains("video", ignore.case = TRUE)) %>%
+  dplyr::select(-contains("comfort_rating", ignore.case = TRUE)) %>%
+  dplyr::select(-contains("3lev")) %>%
+  dplyr::select(-c("usual_mode", "hh_composition")) %>% # use 4lev instead
+  dplyr::select(-c("URL")) %>%
+  group_by(person_ID) %>%
+  summarise_all(list(first)) %>%
+  # keep only person_ID for later identification
+  dplyr::select(-c("ID", "block_ID", "sub_ID", "ID", "cts_ID")) %>%
+  # too much NA
+  dplyr::select(-contains("child")) %>%
+  dplyr::select(-c( "rent_split", "housing_unit_type", "edu_parent",
+             "hh18_older", "edu_self")) %>%
+  mutate(female = replace(female, is.na(female), "NA"))
+
+#       how much missing data? ---- 
+
+# percentages of missingness
+sort(apply(d, 2, function(x) {mean(is.na(x))}))
+
+# generally rows with a lot of missing data have many missing opinion variables
+# @View(filter(d.person, rowSums(is.na(d.person)) >= 10))$person_ID
+sort(colSums(is.na(d.model)))
+table(rowSums(is.na(d.person))) #lose 384 rows, or 79 individuals (out of 15288 and 3089 respectively)
+
+#       Explore age variable (ended up with very simple model) ----
+
+# Similar pattern for age and primary role as housing cost, not surprising
+ggplot(d, aes(x = age)) + 
+  geom_histogram() + 
+  facet_wrap(~primary_role, scales = "free_y", ncol = 1)
+
+d.person.age = d.person %>% 
+  #just in case
+  dplyr::select(-contains("age_impute")) %>%
+  #repeat other vars
+  dplyr::select(-c("secondary_mode", "monthly_housing_cost_class")) %>%
+  # too much NA and not significant anyway
+  dplyr::select(-c("distance")) %>%
+  # Use commute sum variable instead, indiv. vars generally not signif anyway
+  dplyr::select(-c("op_schedule_transit", "op_commute_goes_well",
+            "op_commute_best_imagine", "op_satisfied_with_commute",
+            "op_commute_positive_feelings", "op_commute_no_change",
+            # took out more vars in favor of simpler imputation model, fewer excluded entries
+            "op_commute_positive_negative", "op_like_biking", "op_feel_safe",
+            "op_like_transit", "op_like_driving", "op_like_driving", "op_travel_wasted",
+            "op_arrive_professional", "op_bike_often", "op_arrive_professional",
+            "op_need_car", "op_travel_stress", "op_limit_driving", "op_need_own_car",
+            "op_smartphone",
+            "bike_access", "secondary_mode_BIKE", "bike_ability", "usual_mode_4lev",
+            #too much missing in rows also missing age, impairs imputation:
+            "monthly_housing_cost", "rent_share", "hh_composition_4lev", 
+            "license", "op_LIKE_COMMUTE_SUM", "comfort_four_no_lane", "female",
+            "op_eco_concern"
+  )
+  )
+
+names(d.person.age)
+colSums(is.na(d.person.age))
+
+# For lm, residual plot showwed some fanning and effects of restricted age (can't be below 18) , 
+# -> poisson glm respects the minimum and residuals look more balanced 
+#    (we expect variance to go up with age, to some extent)
+# Max outliers are outliers are for two 54 yr. old undergrads
+
+lm.age = lm(age - 18 ~.,  data = d.person.age %>% select(-"person_ID")) 
+
+glm.age = glm(age - 18 ~.,  data = d.person.age %>% select(-"person_ID"), #%>%
+              #filter(! (grepl(primary_role, pattern = "Undergraduate") & age > 50) ),
+              family = "poisson")
+
+par(mfrow = c(1,2))
+hist(resid(glm.age, type = "response")); hist(resid(lm.age))
+quantile(resid(glm.age, type = "response"), c(.005,.05,.9,.995))
+quantile(resid(lm.age, type = "response"), c(.005,.05,.9,.995))
+summary(glm.age); summary(lm.age)
+dim(model.matrix(glm.age)) #lose ~ 7pct of data, including 45 na's in age collected
+plot(glm.age)
+plot(lm.age)
+#age means by role
+#d.person %>% group_by(primary_role) %>% summarize(mean(age, na.rm = T))
+#compare glm and lm predictions
+#plot(sort(18 + predict(glm.age, type = "response")), type = 'l', ylim = c(15,75)); 
+#points(sort(18 + predict(lm.age)), col ="red", type = "l")
+
+#How many rows do we lose?
+rowSums(is.na(d.person.age %>% filter(is.na(age)) %>% select(-"age")))
+colSums(is.na(d.person.age %>% filter(is.na(age)) %>% select(-"age")))
+
+#       age imputation ----
+age.impute = 18 + predict(glm.age, newdata = d.person %>% filter(is.na(age)), type = "response")       
+d.person$age_impute = d.person$age
+d.person$age_impute[is.na(d.person$age)] = age.impute
+
+names(age.impute) = (d.person %>% filter(is.na(age)))$person_ID
+d.model$person_ID = d$person_ID #works if same dim
+d.model$age_impute = d.model$age
+d.model.age.impute =  age.impute[as.character(d.model$person_ID)]
+d.model$age_impute[!is.na(d.model.age.impute)] = d.model.age.impute[!is.na(d.model.age.impute)]
+d.model = d.model %>% dplyr::select(-c("age"))
+
+#       Compare to cross-validated model (if more complicated model for age): 
+
+# #Hold out set with vanilla poisson glm
+# s = sample(1:nrow(d.person.age))[1:300] #hold-out set; make large enough to capture factor levels
+# glm.age = glm(age - 18 ~.,  data = d.person.age[-s,] %>% select(-"person_ID"), family = "poisson")
+# test.resids = d.person.age[s,"age"] - (18 + predict(glm.age, newdata = d.person.age[s,], type = "response"))    
+# hist(test.resids[[1]], breaks = 20)
+# quantile(test.resids[[1]], c(.005,.995), na.rm = T)
+# 
+# cvglm.age = cv.glmnet(model.matrix(glm.age), glm.age$y)
+# #plot(cvglm.age)
+# coef(cvglm.age, s = cvglm.age$lambda.min)
+# s.x = model.matrix(age ~ ., data = d.person.age[s,] %>% select(-c("person_ID")))
+# 
+# cv.test.resids = d.person.age[s[-which(rowSums(is.na(d.person.age[s,])) > 0)],"age"]  - 
+#   (18 + predict.cv.glmnet(cvglm.age, newx = s.x, type = "response", s = cvglm.age$lambda.min))
+# hist(cv.test.resids[[1]], breaks = 20)
+# quantile(cv.test.resids[[1]], c(.05,.95))
+
 # -----------------------------------------------------------------------------------
-# 3. Preliminary fixed-effect models ----
+# 4. Preliminary fixed-effect models ----
 
 
-#     Models with specific subsets of effects ----
+#     i.   Models with specific subsets of effects ----
 #     - Scores and Bike lane ----
 
 # None of these models perform particularly well. The residual deviance not much lower than for a null model. 
@@ -280,8 +410,11 @@ summary(MASS::polr(as.ordered(comfort_rating) ~ as.factor(video_name), data = d,
 # Bike lane models:
 summary(MASS::polr(as.ordered(comfort_rating) ~ as.factor(d.model$bike_lane_SUM_ST), 
                    data = d, Hess = TRUE)) #Residual Deviance: 56876.68 
+summary(MASS::polr(as.ordered(comfort_rating) ~ d.model$bike_operating_space_ST, 
+                   data = d, Hess = TRUE)) #Residual Deviance: 57841.45 
 summary(MASS::polr(as.ordered(comfort_rating) ~ d.model$speed_limit_mph_ST_3lev + 
                      as.factor(d.model$bike_lane_SUM_ST), data = d, Hess = TRUE)) #Residual Deviance: 56260.20 
+
 
 # see "Models with only street features" for expansion of this 
                                       
@@ -347,7 +480,7 @@ d$person_ID[c(which.max(abs(lm.video_name$residuals)), which.max(abs(lm.street$r
 #View(d %>% mutate(x = as.numeric(comfort_rating)) %>% group_by(person_ID) %>%
 #            mutate(y = max(x) - min(x)) %>% filter(y == 0) %>% arrange(person_ID))
 
-#     Models allowing all main effects ----
+#     ii.  Models allowing all main effects ----
 
 #     - Numeric response (don't use) ----
 lm.prelim = lm(comfort_rating ~ . , data = d.model %>% 
@@ -356,238 +489,130 @@ summary(lm.prelim)
 
 #     - Ordered response (OK) ----
 
-d.model.ord =  d.model %>% select(-c("comfort_rating", "person_ID")) 
-ord.prelim = MASS::polr(comfort_rating_ordered ~ ., data = d.model.ord, Hess = TRUE)
+ord.prelim = MASS::polr(comfort_rating_ordered ~ . - comfort_rating - person_ID - video_name, 
+                        #comfort 4lane seems to have non-linear effect (noticed after considering interactions):
+                        data = d.model %>%  
+                          mutate(comfort_four_no_lane = as.factor(comfort_four_no_lane),
+                                 video_name = d$video_name), #<- for later 
+                        Hess = TRUE)
 summary(ord.prelim)
 
 #     - Penalized ordered response (GLMNET, lasso) ----
 
 glmcr.prelim = glmnetcr(x = model.matrix(ord.prelim)[,-1], y = model.frame(ord.prelim)$comfort_rating_ordered)
-names(glmcr.prelim)
-png("IMG/penalized_ordered_coef_path.png", width = 1600, height = 1000)
-par(mai  = c(2,2,2,2))
-plot.glmnetcr(glmcr.prelim) # I manually added a cex.axis = .5 arg
-dev.off()
+par(mai  = c(1,1,1,3))
 plot(glmcr.prelim$dev.ratio)
-s = 18 # isolate top effects (incl two levels of bike land)
-sort(nonzero.glmnetcr(glmcr.prelim, s = s)$beta[1:(s-6)])
-top.names = (names(nonzero.glmnetcr(glmcr.prelim, s = s)$beta))[1:(s-6)]
+s = 23 # isolate top effects (incl two levels of bike land) 
+# This model is more parsimonious, the effects make sense, and it's backed up by the
+# elbow of the deviance plot
+round(nonzero.glmnetcr(glmcr.prelim, s = s)$beta, 3)
+top.names = names(nonzero.glmnetcr(glmcr.prelim, s = s)$beta)
+top.names = top.names[!grepl(top.names, pattern = "cp[0-9]{1}")]           
+top.names
 
-#Note how buffered bike lane and bike lane and parking lenght width trade off
+# Second round after trimming -- easier to read plot
+glmcr.prelim2 = glmnetcr(x = model.matrix(ord.prelim)[,colnames(model.matrix(ord.prelim)) %in% top.names], 
+                         y = model.frame(ord.prelim)$comfort_rating_ordered)
+png("IMG/penalized_ordered_coef_path.png", width = 1600, height = 1000 )
+par(mai  = c(1,1,1,3))
+plot.glmnetcr(glmcr.prelim2) # I manually added a cex.axis = .5 arg
+dev.off()
+
 
 #     Models allowing main AND interaction effects ----
-#     - Decision tree exploration ----
+
+#     - Hard-coding some potential interactions ----
+
+round(prop.table(table(d$comfort_rating_3lev, d$bike_operating_space_ST, d$veh_volume2_ST), c(2,3)), 2)
+
+d.model.int = data.frame(glmcr.prelim2$x) %>% mutate(
+  comfort_rating_ordered = glmcr.prelim2$y,
+  veh_vol_non0_opspace_0_ST = as.numeric(veh_volume2_ST > 1 &  bike_operating_space_ST < 3)
+  # add one for speed and operating space?
+  # street_park_opsace_low = street_parking_ST == 1 & bike_operating_space_ST < 8
+  )
+
+#     - Looking for potential interactions ----
+#       - Decision tree exploration ----
 
 # As with models, most of what comes out is relationships between street variables and opinions related to biking
 
 library(rpart)
 library(rpart.plot)
 #Set response type
-mf3 = model.frame( comfort_rating_3lev ~ ., 
-                   data = d.model %>% select(-c("comfort_rating", "comfort_rating_ordered")) %>% 
-                     mutate(comfort_rating_3lev = d$comfort_rating_3lev) )
+mf3 = model.frame( as.numeric(comfort_rating_ordered) > 3 ~ ., 
+                   data = data.frame(d.model.int))
 
 tree.prelim = rpart(mf3, control = rpart.control(minsplit = 5, minbucket = 2, cp = .005),
                     model = TRUE, method = "class")
 
+par(mfrow = c(1,1))
 rpart.plot(tree.prelim, digits = 1, cex = .6, type = 3)
 
-#     - Numeric response with interactions (don't use) ----
+# Tried looking at all potential interactions. too difficult to sort through this. 
+# It again seems like more evidence of factors in need of transformation
 
-# Consider all interaction for top effects from penalized model
-top.lm = lm(as.numeric(model.frame(ord.prelim)$comfort_rating_ordered) ~ .*(. - bike_lane_SUM_ST2),
-            data = data.frame(model.matrix(ord.prelim)[,-1][,top.names]))
-summary(top.lm)
+#ord.prelim.int.mm = model.matrix(comfort_rating_ordered ~ .*., data = data.frame(comfort_rating_ordered = glmcr.prelim2$y, glmcr.prelim2$x))
+#glmcr.prelim.int = glmnetcr(x = ord.prelim.int.mm[,-1], y =glmcr.prelim2$y)
+#plot(glmcr.prelim.int$dev.ratio)
+#sort(nonzero.glmnetcr(glmcr.prelim.int, s = 10)$beta)
+#names(nonzero.glmnetcr(glmcr.prelim.int, s = 10)$beta)
+#plot.glmnetcr(glmcr.prelim.int) #
 
-# Consider specific interactions
-lm.prelim.int = lm(comfort_rating ~ . + 
-                     speed_limit_mph_ST_3lev:bike_lane_SUM_ST +
-                     comfort_four_no_lane:bike_lane_SUM_ST +
-                     female:comfort_four_no_lane +
-                     female:street_parking_ST +
-                     # potential interactions
-                     op_like_biking:bike_lane_SUM_ST + 
-                     op_feel_safe:bike_lane_SUM_ST + 
-                     bike_ability:comfort_four_no_lane +
-                     bike_ability:bike_lane_SUM_ST + 
-                     bike_ability:veh_volume2_ST +
-                     street_parking_ST:veh_volume2_ST  +
-                     street_parking_ST:bike_lane_SUM_ST  +
-                     female:op_travel_stress, 
-                  data = d.model %>% 
-                     select(-c("comfort_rating_ordered", "person_ID")))
-summary(lm.prelim.int)
 
-#     - Ordered response with interactions (OK) ----
+#     - Ordered response with interactions ----
 
-# Consider only top effects -- after model stabilizes
+# just considering interactions of street varaibles for now, specifically between features of traffic and available biking space 
+#    -- haven't added random effects for individuals yet
+#    -- found that with unpenalized model the interactions often made main effects switch directions in non-intuitive ways,
+#       and their signs were also often counterintuitive
 
-ord.prelim.int = MASS::polr(comfort_rating_ordered ~ . + 
-                          # potential interactions
-                            speed_limit_mph_ST_3lev:bike_lane_SUM_ST +
-                            comfort_four_no_lane:bike_lane_SUM_ST +
-                            female:comfort_four_no_lane +
-                            female:street_parking_ST +
-                            op_like_biking:bike_lane_SUM_ST + 
-                            op_feel_safe:bike_lane_SUM_ST + 
-                            bike_ability:comfort_four_no_lane +
-                            bike_ability:bike_lane_SUM_ST + 
-                            bike_ability:veh_volume2_ST +
-                            street_parking_ST:veh_volume2_ST  +
-                            street_parking_ST:bike_lane_SUM_ST  +
-                            female:op_travel_stress, 
-                            # + comfort_four_no_lane:shoulder_width_ft_ST + female:op_travel_stress,
-                   data = d.model.ord %>% select(-c("num_lanes_ST")), Hess = TRUE)
+ord.prelim.int = MASS::polr(comfort_rating_ordered ~ . +   
+                           # consider interactions 
+                            street_parking_ST:bike_lane_SUM_ST1 +
+                            street_parking_ST:bike_lane_SUM_ST2 +
+                            street_parking_ST:bike_operating_space_ST + 
+                            veh_volume2_ST:bike_lane_SUM_ST1 +
+                            veh_volume2_ST:bike_lane_SUM_ST2 +
+                            veh_volume2_ST:bike_operating_space_ST +
+                            speed_limit_mph_ST_3lev.40.50.:bike_lane_SUM_ST1 +
+                            speed_limit_mph_ST_3lev.40.50.:bike_lane_SUM_ST2 +
+                            speed_limit_mph_ST_3lev.40.50.:outside_lane_width_ft_ST +
+                            speed_limit_mph_ST_3lev.40.50.:bike_operating_space_ST,
+                            #speed_prevail_minus_limit_ST:bike_lane_SUM_ST1 +
+                            #speed_prevail_minus_limit_ST:bike_lane_SUM_ST2 +
+                            #speed_prevail_minus_limit_ST:bike_operating_space_ST,
+                   data = d.model.int, Hess = TRUE)
 summary(ord.prelim.int)
 
 #     - Penalized ordered response with interactions (GLMNET, lasso) ----
 
-# Too many interaction effects here that dwarf main effects:
-glmcr.prelim.2 = glmnetcr(x = model.matrix(top.lm)[,-1], y = model.frame(ord.prelim)$comfort_rating_ordered)
-plot.glmnetcr(glmcr.prelim.2) # I manually added a cex.axis = .5 arg
-nonzero.glmnetcr(glmcr.prelim.2, s = 20)$beta
-plot(glmcr.prelim.2$dev.ratio)
-
-# Try More restricted (better):
-glmcr.prelim.3 = glmnetcr(x = model.matrix(lm.prelim.int)[,-1], 
-                          y = model.frame(ord.prelim.int)$comfort_rating_ordered) #use ord for ordered response
-plot.glmnetcr(glmcr.prelim.3) # I manually added a cex.axis = .5 arg
-nonzero.glmnetcr(glmcr.prelim.3, s = 22)$beta
-plot(glmcr.prelim.2$dev.ratio)
-
-
-# ----------------------------------------------------------------------------------d$bik
-# 4.  Missing Data ----
-
-#   Data set (by person) of person-level variables for potential imputation & filtering ----
-
-d.person = d %>% 
-  select(-contains("ST", ignore.case = FALSE)) %>%
-  select(-contains("video", ignore.case = TRUE)) %>%
-  select(-contains("comfort_rating", ignore.case = TRUE)) %>%
-  select(-contains("3lev")) %>%
-  select(-c("usual_mode", "hh_composition")) %>% # use 4lev instead
-  select(-c("URL")) %>%
-  group_by(person_ID) %>%
-  summarise_all(list(first)) %>%
-  # keep only person_ID for later identification
-  select(-c("ID", "block_ID", "sub_ID", "ID", "cts_ID")) %>%
-  # too much NA
-  select(-contains("child")) %>%
-  select(-c( "rent_split", "housing_unit_type", "edu_parent",
-             "hh18_older", "edu_self")) %>%
-  mutate(female = replace(female, is.na(female), "NA"))
-
-#       Explore age variable (ended up with very simple model) ----
-
-# Similar pattern for age and primary role as housing cost, not surprising
-ggplot(d, aes(x = age)) + 
-  geom_histogram() + 
-  facet_wrap(~primary_role, scales = "free_y", ncol = 1)
-
-d.person.age = d.person %>% 
-  #just in case
-  select(-contains("age_impute")) %>%
-  #repeat other vars
-  select(-c("secondary_mode", "monthly_housing_cost_class")) %>%
-  # too much NA and not significant anyway
-  select(-c("distance")) %>%
-  # Use commute sum variable instead, indiv. vars generally not signif anyway
-  select(-c("op_schedule_transit", "op_commute_goes_well",
-            "op_commute_best_imagine", "op_satisfied_with_commute",
-            "op_commute_positive_feelings", "op_commute_no_change",
-            # took out more vars in favor of simpler imputation model, fewer excluded entries
-            "op_commute_positive_negative", "op_like_biking", "op_feel_safe",
-            "op_like_transit", "op_like_driving", "op_like_driving", "op_travel_wasted",
-            "op_arrive_professional", "op_bike_often", "op_arrive_professional",
-            "op_need_car", "op_travel_stress", "op_limit_driving", "op_need_own_car",
-            "op_smartphone",
-            "bike_access", "secondary_mode_BIKE", "bike_ability", "usual_mode_4lev",
-            #too much missing in rows also missing age, impairs imputation:
-            "monthly_housing_cost", "rent_share", "hh_composition_4lev", 
-            "license", "op_LIKE_COMMUTE_SUM", "comfort_four_no_lane", "female",
-            "op_eco_concern"
-            )
-  )
-
-names(d.person.age)
-colSums(is.na(d.person.age))
-
-# For lm, residual plot showwed some fanning and effects of restricted age (can't be below 18) , 
-# -> poisson glm respects the minimum and residuals look more balanced 
-#    (we expect variance to go up with age, to some extent)
-# Max outliers are outliers are for two 54 yr. old undergrads
-
-lm.age = lm(age - 18 ~.,  data = d.person.age %>% select(-"person_ID")) 
-
-glm.age = glm(age - 18 ~.,  data = d.person.age %>% select(-"person_ID"), #%>%
-              #filter(! (grepl(primary_role, pattern = "Undergraduate") & age > 50) ),
-              family = "poisson")
-
-par(mfrow = c(1,2))
-hist(resid(glm.age, type = "response")); hist(resid(lm.age))
-quantile(resid(glm.age, type = "response"), c(.005,.05,.9,.995))
-quantile(resid(lm.age, type = "response"), c(.005,.05,.9,.995))
-summary(glm.age); summary(lm.age)
-dim(model.matrix(glm.age)) #lose ~ 7pct of data, including 45 na's in age collected
-plot(glm.age)
-plot(lm.age)
-#age means by role
-#d.person %>% group_by(primary_role) %>% summarize(mean(age, na.rm = T))
-#compare glm and lm predictions
-#plot(sort(18 + predict(glm.age, type = "response")), type = 'l', ylim = c(15,75)); 
-#points(sort(18 + predict(lm.age)), col ="red", type = "l")
-
-#How many rows do we lose?
-rowSums(is.na(d.person.age %>% filter(is.na(age)) %>% select(-"age")))
-colSums(is.na(d.person.age %>% filter(is.na(age)) %>% select(-"age")))
-
-#       age imputation ----
-age.impute = 18 + predict(glm.age, newdata = d.person %>% filter(is.na(age)), type = "response")       
-d.person$age_impute = d.person$age
-d.person$age_impute[is.na(d.person$age)] = age.impute
-
-names(age.impute) = (d.person %>% filter(is.na(age)))$person_ID
-d.model$person_ID = d$person_ID #works if same dim
-d.model$age_impute = d.model$age
-d.model.age.impute =  age.impute[as.character(d.model$person_ID)]
-d.model$age_impute[!is.na(d.model.age.impute)] = d.model.age.impute[!is.na(d.model.age.impute)]
- 
-#       Compare to cross-validated model (if more complicated model) ----
-
-#Hold out set with vanilla poisson glm
-s = sample(1:nrow(d.person.age))[1:300] #hold-out set; make large enough to capture factor levels
-glm.age = glm(age - 18 ~.,  data = d.person.age[-s,] %>% select(-"person_ID"), family = "poisson")
-test.resids = d.person.age[s,"age"] - (18 + predict(glm.age, newdata = d.person.age[s,], type = "response"))    
-hist(test.resids[[1]], breaks = 20)
-quantile(test.resids[[1]], c(.005,.995), na.rm = T)
-
-cvglm.age = cv.glmnet(model.matrix(glm.age), glm.age$y)
-#plot(cvglm.age)
-coef(cvglm.age, s = cvglm.age$lambda.min)
-s.x = model.matrix(age ~ ., data = d.person.age[s,] %>% select(-c("person_ID")))
-
-cv.test.resids = d.person.age[s[-which(rowSums(is.na(d.person.age[s,])) > 0)],"age"]  - 
-                    (18 + predict.cv.glmnet(cvglm.age, newx = s.x, type = "response", s = cvglm.age$lambda.min))
-hist(cv.test.resids[[1]], breaks = 20)
-quantile(cv.test.resids[[1]], c(.05,.95))
+# Still see some weird flips of main effects
+glmcr.int = glmnetcr(x = model.matrix(ord.prelim.int)[,-1], y = ord.prelim.int$model$comfort_rating_ordered)
+plot.glmnetcr(glmcr.int) 
+s = 25
+round(nonzero.glmnetcr(glmcr.int, s = s)$beta, 3)
+plot(glmcr.int$dev.ratio)
+top.names.int = names(nonzero.glmnetcr(glmcr.int, s = s)$beta)
+top.names.int = top.names.int[!grepl(top.names.int, pattern = "cp[0-9]{1}")]           
+top.names.int
 
 # ----------------------------------------------------------------------------------
 # 5. Mixed models with person random effects ---------------------------
 
-#     Exploratory: Figure out how to account for between vs. within in the model ----
-
-#---
-# Note: blocks don't reprsent between or within selections (as I has thought), rather they represent types of videos ("loosely based on bike infrastructure, whether the road was a collector or arterial, and speed/traffic of cars")
-# so a video is always in the same block, but the person may see it as within (i.e. they only see it with other videos in the same block [in which case they have uniform block_ID]), or between (e.g  the only see it with other videos NOT within the same block[in which case they have no duplicated block_ID]). The block corresponds to broad road type, but the video_group is just an experimental variable. There should roughly be balance across blob and video_group. clear as mud?
-
-# In short *person_ID*, not block_ID, is either between or within 
-#---
-
-# Compare those who received "between" vs. "within" ---
-
-#mean - between stays closer to the center
-d %>% group_by(person_ID) %>% 
+#     - BRMS: Ordered logit with person random effects ####
+#         + Exploratory: Figure out how to account for between vs. within in the model ----
+  
+  #--- Note: blocks don't reprsent between or within selections (as I has thought), rather they represent types of videos ("loosely based on bike infrastructure, whether the road was a collector or arterial, and speed/traffic of cars")
+  # so a video is always in the same block, but the person may see it as within (i.e. they only see it with other videos in the same block [in which case they have uniform block_ID]), or between (e.g  the only see it with other videos NOT within the same block[in which case they have no duplicated block_ID]). The block corresponds to broad road type, but the video_group is just an experimental variable. There should roughly be balance across blob and video_group. clear as mud?
+  
+  # In short *person_ID*, not block_ID, is either between or within 
+  #---
+  
+  # Compare those who received "between" vs. "within" ---
+  
+  #mean - between stays closer to the center
+  d %>% group_by(person_ID) %>% 
   summarize(mean = mean(as.numeric(comfort_rating)), type = first(VideoGroup)) %>%
   ggplot() + geom_density(aes(x = mean, fill = type), alpha = .5)
 
@@ -615,56 +640,30 @@ d %>% group_by(video_name) %>%
             n = n()) %>% arrange(var)
 
 summary(lm(d.video$var ~ d.video$median_comfort))
-#     Ordered logit with person random effects ####
-#     brms ----
-
-options(mc.cores=(parallel::detectCores())/3)
+#         - build and scale (all on 0-1) model frames: ----
+#          + Inclusive coefficient set: ----All levels of selected coefficients ----
 
 d.remodel = d.model %>% 
                 select(-"comfort_rating") %>%
-                select(-"monthly_housing_cost_class", "num_lanes_ST", "speed_prevail_minus_limit_ST") %>%
-                #use age_impute instead
-                select(-"age") %>%
+                select(-c("num_lanes_ST", "primary_role", "child_u18", "divided_road_ST", 
+                       "pavement_condition_ST")) %>% #<- could try adding some of these back in 
                 mutate(person_ID = as.factor(person_ID),
-                       veh_volume2_ST = as.factor(veh_volume2_ST),
-                       divided_road_ST = as.factor(divided_road_ST), #trying this as factor since only three levels
-                       comfort_four_no_lane = as.factor(comfort_four_no_lane),
-                       pavement_condition_ST = as.factor(pavement_condition_ST), #no idea of the units, so treat as factor
+                       video_name = as.factor(d$video_name),
+                       veh_volume2_ST = as.ordered(veh_volume2_ST),
+                       comfort_four_no_lane = as.ordered(comfort_four_no_lane),
                        street_parking_ST = as.factor(street_parking_ST)) %>%
-                      # This follows dillon's suggestion:
-                       #speed = 
-                         #as.factor(cut(d.model$speed_prevail_minus_limit_ST, breaks = c(-13,-8, -3, 3, 8)))
                 #rest of numeric vars get put on 0-1 scale
                 mutate_at(vars(contains("op")), function(x) {x/5}) %>%
                 mutate_at(names(.)[which(sapply(., function(x) {is.numeric(x) && max(x, na.rm = T) > 1}))], 
                           function(x) {(x - min(x, na.rm = T))/max(x - min(x, na.rm = T), na.rm = T)}) %>%
                 #so we don't have to lose this data and respect "NA" responses:
-                mutate(female = replace(female, is.na(female), "NA")) 
+                mutate(female = as.factor(replace(female, is.na(female), "NA")))
 str(d.remodel)
 
-#       missing data ---- 
-# For now, just remove rows with missing data   
-  # generally rows with a lot of missing data have many missing opinion variables
-  # @View(filter(d.person, rowSums(is.na(d.person)) >= 10))$person_ID
+#         - scaling (put all on 0-1 scale by subtracting min and dividing by max) 
 
-sort(colSums(is.na(d.model)))
-sort(colSums(is.na(d.remodel)))
-table(rowSums(is.na(d.person))) #lose 384 rows, or 79 individuals (out of 15288 and 3089 respectively)
+d.remodel = d.remodel %>% mutate_if(is.numeric, function(x) {(x-min(x, na.rm = T))/max(x - min(x, na.rm = T), na.rm = T)})
 
-#       scaling (put all on 0-1 scale by subtracting min and dividing by max) ---- 
-
-#       build and scale model frames: ----
-#         - Inclusive coefficient set: ----
-d.remodel.mat = model.matrix(comfort_rating_ordered ~ ., d.remodel)[,-1]
-
-d.remodel.mat = cbind(
-   apply(d.remodel.mat[ , !grepl(pattern = "person_ID", colnames(d.remodel.mat)) ], 2, function(x) {
-     (x-min(x, na.rm = T))/max(x - min(x, na.rm = T), na.rm = T)
-     }),  person_ID = model.frame(comfort_rating_ordered ~ ., d.remodel)$person_ID) #exclude person_ID from scaling
- 
- d.remodel.df = data.frame(d.remodel.mat)
- d.remodel.df$comfort_rating_ordered = d.model$comfort_rating_ordered[rowSums(is.na(d.remodel))==0]
- d.remodel.df$video_name = d$video_name[rowSums(is.na(d.remodel))==0]
 
 # Full scaling (decided on scaling as above instead)
 # d.remodel.mat = cbind(
@@ -675,81 +674,64 @@ d.remodel.mat = cbind(
 #   d.remodel.df$comfort_rating_ordered = d.model$comfort_rating_ordered[rowSums(is.na(d.remodel))==0]
 #   d.remodel.df$video_name = d$video_name[rowSums(is.na(d.remodel))==0]
 
+#          + Exclusive coefficient set -- only top effects from penalized ordinal model and hardcoded ineractions ----
 
-#         - Exclusive coefficient set (only top effects from penalized ordinal model): ----
- d.remodel.mat2 = model.matrix(comfort_rating_ordered ~ ., data = d.remodel)
- d.remodel.mat2 = d.remodel.mat2[,colnames(d.remodel.mat2)[sapply(colnames(d.remodel.mat2), grepl, pattern = paste(top.names, collapse = "|"))]]
- d.remodel.mat2 = cbind(
-   apply(d.remodel.mat2, 2, function(x) {(x-min(x, na.rm = T))/max(x - min(x, na.rm = T), na.rm = T)}),
-   person_ID = d.remodel.df$person_ID) #exclude person_ID from scaling
- 
- d.remodel.df2 = data.frame(d.remodel.mat2)
- d.remodel.df2$comfort_rating_ordered = d.model$comfort_rating_ordered[rowSums(is.na(d.remodel))==0]
- d.remodel.df2$video_name = d$video_name[rowSums(is.na(d.remodel))==0]
- 
- 
-#         - Inclusive coefficient set + interactions: ----
- d.remodel.mat3 = model.matrix(comfort_rating_ordered ~ . + 
-                     op_like_biking:bike_lane_SUM_ST +                               
-                     bike_ability:comfort_four_no_lane +                                
-                     comfort_four_no_lane:shoulder_width_ft_ST, d.remodel)[,-1]
- 
- d.remodel.mat3 = cbind(
-   apply(d.remodel.mat3[ , !grepl(pattern = "person_ID", colnames(d.remodel.mat3)) ], 2, function(x) {
-     (x-min(x, na.rm = T))/max(x - min(x, na.rm = T), na.rm = T)
-   }),  person_ID = model.frame(comfort_rating_ordered ~ ., d.remodel)$person_ID) #exclude person_ID from scaling
- 
- d.remodel.df3 = data.frame(d.remodel.mat3)
- d.remodel.df3$comfort_rating_ordered = d.model$comfort_rating_ordered[rowSums(is.na(d.remodel))==0]
- d.remodel.df3$video_name = d$video_name[rowSums(is.na(d.remodel))==0]
- 
- 
- 
- 
-#       MODELS  ----
+# may only include some levels of certain factors
 
- #Setting this option will change the default for brm
- options("mc.cores" = min(parallel::detectCores(), 4))
- #getOption("mc.cores")
+str(d.model.int)
+dim(d.model.int)
+
+d.remodel.int = d.model.int %>% 
+  mutate_if(is.numeric, function(x) {(x-min(x, na.rm = T))/max(x - min(x, na.rm = T), na.rm = T)}) %>%
+  mutate(person_ID = as.factor(ord.prelim$model$person_ID),
+         video_name = as.factor(ord.prelim$model$video_name))
+
+#         - scaling (put all on 0-1 scale by subtracting min and dividing by max) 
+
+d.remodel.int = d.remodel.int %>% mutate_if(is.numeric, function(x) {(x-min(x, na.rm = T))/max(x - min(x, na.rm = T), na.rm = T)})
+
+#          + Exclusive coefficient set + interactions: ----
+
+d.remodel.int2 = data.frame(glmcr.int$x[,top.names.int %in% colnames(glmcr.int$x)]) %>%
+                    mutate(person_ID = as.factor(ord.prelim$model$person_ID),
+                          video_name = as.factor(ord.prelim$model$video_name))
+
+#         - scaling (put all on 0-1 scale by subtracting min and dividing by max) 
+
+d.remodel.int2 = d.remodel.int2 %>% mutate_if(is.numeric, function(x) {(x-min(x, na.rm = T))/max(x - min(x, na.rm = T), na.rm = T)})
+
  
-# Model with person-level random effects, inclusive coefficient set-- 
-randord.brms = brm(comfort_rating_ordered ~ (1|person_ID) + . - person_ID, 
-                    data=d.remodel.df %>% select(-c("video_name")), 
-                    family=cumulative("logit"), iter = 2000)
+#     - i. RUN MODELS  ----
 
-# Model with person-level random effects, just top effects discovered before -- 
-randord.brms2 = brm(comfort_rating_ordered ~ (1|person_ID) + . - person_ID, 
-                   data=d.remodel.df2 %>% select(-c("video_name")), 
-                   family=cumulative("logit"), iter = 2000)
+# Inclusive coefficient set-- 
+source("R/run_models_1.R")
+# exclusive coefficient set: just top effects discovered before -- 
+source("R/run_models_2.R")
+# exclusive coefficient set + interactions-
+source("R/run_models_3.R")
 
-# Model with person-level random effects, inclusive coefficient set +  a few interactions-- 
-randord.brms3 = brm(comfort_rating_ordered ~ (1|person_ID) + . - person_ID, 
-                    data=d.remodel.df3 %>% select(-c("video_name")), 
-                    family=cumulative("logit"), iter = 2000)
+#         + LOAD MODELS AS NECESARY ----
 
-
-# Model with person-level random effects, inclusive coefficient set +  a few interactions + SHRINKAGE prior -- 
-randord.brms4 = brm(comfort_rating_ordered ~ (1|person_ID) + . - person_ID, 
-                    data=d.remodel.df3 %>% select(-c("video_name")), 
-                    family=cumulative("logit"), iter = 2000,
-                    set_prior("horseshoe(1)", class = "b"))
-
-save.image()
-
-# quick evaluate output ----
+#         + quick evaluate output ----
 summary(randord.brms)
 plot(randord.brms)
 #
 post.randord.brms = as.array(randord.brms)
 post.randord.brms2 = as.array(randord.brms2)
 post.randord.brms3 = as.array(randord.brms3)
+post.randord.brms.pen = as.array(randord.brms.pen)
+post.randord.brms3.pen = as.array(randord.brms3.pen)
 
 randord.brm.plotgrid = plot_grid(
 bayesplot::mcmc_intervals(post.randord.brms, pars = dimnames(post.randord.brms)$parameters[!grepl(dimnames(post.randord.brms)$parameters, pattern = "person_ID|lp__")], prob_outer = .95),
 
 bayesplot::mcmc_intervals(post.randord.brms2, pars = dimnames(post.randord.brms2)$parameters[!grepl(dimnames(post.randord.brms2)$parameters, pattern = "person_ID|lp__")], prob_outer = .95) + geom_vline(aes(xintercept = 0)),
 
-bayesplot::mcmc_intervals(post.randord.brms3, pars = dimnames(post.randord.brms3)$parameters[!grepl(dimnames(post.randord.brms3)$parameters, pattern = "person_ID|lp__")], prob_outer = .95) + geom_vline(aes(xintercept = 0))
+bayesplot::mcmc_intervals(post.randord.brms3, pars = dimnames(post.randord.brms3)$parameters[!grepl(dimnames(post.randord.brms3)$parameters, pattern = "person_ID|lp__")], prob_outer = .95) + geom_vline(aes(xintercept = 0)),
+
+bayesplot::mcmc_intervals(post.randord.brms.pen, pars = dimnames(post.randord.brms.pen)$parameters[!grepl(dimnames(post.randord.brms.pen)$parameters, pattern = "person_ID|lp__")], prob_outer = .95) + geom_vline(aes(xintercept = 0)),
+
+bayesplot::mcmc_intervals(post.randord.brms3.pen, pars = dimnames(post.randord.brms3.pen)$parameters[!grepl(dimnames(post.randord.brms3.pen)$parameters, pattern = "person_ID|lp__")], prob_outer = .95) + geom_vline(aes(xintercept = 0))
 )
 
 ggsave("IMG/brms_plot_grid", plot = randord.brm.plotgrid, height = 16)
@@ -759,63 +741,61 @@ ggsave("IMG/brms_plot_grid", plot = randord.brm.plotgrid, height = 16)
 # marginal_effects(randord.brms) #makes me realize potential weirdness of scaling factor variabes. Better approach?
 # launch_shinystan(randord.brms)
 
-#       Predictions ----
+#         + Predictions ----
 
+# Single
+predict(randord.brms, newdata = d.remodel[1,])
 # Overall
-predict(randord.brms, newdata = d.remodel.df[1,])
-
 randord.brms.predict = predict(randord.brms) #posterior probs of each class with randomness
-randord.brms.predict.ev = data.frame(predict.brms = 
-  randord.brms.predict %*% c(1:7), 
-  person_ID = d.remodel.df$person_ID,
-  video_name = d.remodel.df$video_name)
+randord.brms.predict.ev =  randord.brms.predict %*% c(1:7)
+# version of residuals
+hist(randord.brms.predict.ev - as.numeric(randord.brms$data$comfort_rating_ordered)) 
 
-hist(predict(randord.brms, newdata = d.remodel.df[1,-c(15, 31:32)], nsamples = 1000, re_formula = NA, summary = F), breaks = 30)
-predict(randord.brms, newdata = filter(d.remodel.df, person_ID == "2149") %>% select(-c("comfort_rating_ordered", "video_name")), nsamples = 1000, re_formula = NA, summary = F)
+#         + Random Effects ----
 
-# person-level random effects -- do we want a different prior?
+# Many large person-level random effects -- do we want a more restrictive prior?
 pi.samples = posterior_samples(randord.brms, pars = "person_ID")
+pi.means = apply(pi.samples, 2, mean)
+hist(pi.means); summary(pi.means)
 hist(apply(pi.samples, 2, median), breaks = 20)
 summary(apply(pi.samples, 2, median))
 
-plot(as.numeric(d.remodel.df$comfort_rating_ordered) - randord.brms.predict.ev$predict.brms) #apply(randord.brms.predict, 1, which.max)
-hist(plot(as.numeric(d.remodel.df$comfort_rating_ordered) - predict(randord.brms) %*% c(1:7)))
-
-# posterior sampling of person effects
-pi.samples = posterior_samples(randord.brms, pars = "person_ID")
-pi.means = apply(pi.samples, 2, mean)
-hist(pi.means)
-#person effects can be large. Especially for people who always feel uncomfortable despite a large bike lane
+# Look at inidividaul large person random effects
+# Especially for people who always feel uncomfortable despite a large bike lane
 which(pi.means < -5 )
-#weird that they all have the same videos?
 filter(d, person_ID %in% c("21", "2149", "1587", "2060", "44")) %>% select(comfort_rating, NCHRP_BLOS_ST, bike_lane_SUM_ST, comfort_four_no_lane, video_name, VideoGroup, person_ID) %>%
   arrange(person_ID)
+#weird that they all have the same videos?
 
+# Look at distributions of random effects when large
 length(which(abs(pi.means) > 3 ))
-
 pi.samples.melt = melt(data.frame(pi.samples[,which(abs(pi.means) > 3 )]))
 pi.samples.melt$variable = factor(pi.samples.melt$variable,
                                   levels = unique(pi.samples.melt$variable)[order(pi.means[which(abs(pi.means) > 3 )])])
 ggplot(data = pi.samples.melt) + 
   geom_density_ridges(aes(x = value, group = variable, y = variable))
 
-#           Compare predictions from ordinal model with and without random effects ----
+#         + Compare predictions from ordinal model with and without random effects ----
 
 # Make data frame of response and model predictions (as expected values)
-ord.prelim.predict = data.frame(predict.ord = predict(ord.prelim, type = "probs") %*%  c(1:7), 
-                                predict.ord.mode = as.numeric(predict(ord.prelim, type = "class")),
-                                person_ID = d[rowSums(is.na(d.model))==0, c("person_ID")],
-                                video_name = d[rowSums(is.na(d.model))==0, c("video_name")])
+ord.prelim.predict = data.frame(predict.ord = apply(predict(glmcr.prelim, type = "probs")$probs, 1:2, mean) %*%  c(1:7), 
+                                #predict.ord.mode = as.numeric(predict(glmcr.prelim, type = "class")),
+                                person_ID = d.remodel.int$person_ID,
+                                video_name = d.remodel.int$video_name)
 
-ord.predict.compare = left_join(ord.prelim.predict, randord.brms.predict.ev, 
+ord.predict.compare = left_join(ord.prelim.predict, data.frame(randord.brms.predict.ev,
+                                                               person_ID = randord.brms$data$person_ID, 
+                # to fix
+                video_name = d.remodel[apply(d.remodel, 1, function(x) {sum(is.na(x)) == 0}), "video_name"]), 
                                 by = c("person_ID", "video_name"))
 
 ord.predict.compare$response = as.numeric(ord.prelim$model$comfort_rating_ordered)
 ord.predict.compare = ord.predict.compare %>% arrange(response)
+plot(ord.predict.compare$predict.ord, ord.predict.compare$randord.brms.predict.ev)
 
-# Compare by plotting ----
+#         + Compare by plotting ----
 
-# in base ----
+#           - in base ----
 par(mfrow = c(1,3))
 plot(ord.predict.compare$predict.ord.mode, col = "red", type = "p", ylim = c(1,7), 
      main = "no random effects - modal response")
@@ -828,7 +808,7 @@ points(ord.predict.compare$response, col = "black", type = "l")
 #residuals + noise
 plot(rnorm(nrow(ord.predict.compare),0,.5) + (ord.predict.compare$predict.brms - ord.predict.compare$response)[order(ord.predict.compare$predict.brms)], pch = ".")
 
-# in ggplot ----
+#           - in ggplot ----
 plot_grid(
 ggplot(ord.predict.compare) + 
   geom_hex(aes(x = 1:nrow(ord.predict.compare), y = predict.ord), bins = 10) +
@@ -839,18 +819,18 @@ ggplot(ord.predict.compare) +
 )
 ggsave("IMG/predictions_no_rand_vs_rand.png")
 
-# by histogram ----
+#           - by histogram ----
 par(mfrow = c(1,1))
 hist(ord.predict.compare$predict.ord - ord.predict.compare$response, col = "gray", ylim = c(0,5000), breaks = 20,
      main = "Comparison of residuals of model with (green) and without (gray) random effects")
 hist(ord.predict.compare$predict.brms - ord.predict.compare$response, add = T, col = "green", density = 30, breaks = 20)
 
-# by quantilese ----
+#           - by quantiles ----
 round(quantile(ord.predict.compare$predict.ord- ord.predict.compare$response, seq(0.05,.95,.05)),2)
 round(quantile(ord.predict.compare$predict.brms - ord.predict.compare$response, seq(0.05,.95,.05)),2)
 
+# -------------------------------------------------------------------------------------
 # ------------------------------ xx. Scratch -----------------------------------------
-
 #       Explore housing cost (most missing data of variables in prelim models) ----
 
 # Visualize relationship between housing cost and primary role

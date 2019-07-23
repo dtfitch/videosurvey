@@ -8,9 +8,9 @@ t0 = Sys.time()
 randord.brms2 = brm(comfort_rating_ordered ~ (1|person_ID) + . - person_ID - video_name, 
                     data=d.remodel.int, 
                     family=cumulative("logit"), iter = 2000,
-                    set_prior("normal(0,5)", class = "b"),
-                    set_prior("student_t(3,0,5)", class = "Intercept"),
-                    set_prior("student_t(3,0,5)", class = "sd"))
+                    prior = c(set_prior("normal(0,5)", class = "b"), 
+                              set_prior("student_t(3,0,5)", class = "Intercept"),
+                              set_prior("student_t(3,0,5)", class = "sd")))
 
 saveRDS(randord.brms2, "randord_brms2.RDS")
 
@@ -18,9 +18,9 @@ saveRDS(randord.brms2, "randord_brms2.RDS")
 randord.brms2.vid = brm(comfort_rating_ordered ~ (1|person_ID) + (1|video_name) + . - person_ID - video_name, 
                         data=d.remodel.int, 
                         family=cumulative("logit"), iter = 2000,
-                        set_prior("normal(0,5)", class = "b"),
-                        set_prior("student_t(3,0,5)", class = "Intercept"),
-                        set_prior("student_t(3,0,5)", class = "sd"))
+                        prior = c(set_prior("normal(0,5)", class = "b"), 
+                                  set_prior("student_t(3,0,5)", class = "Intercept"),
+                                  set_prior("student_t(3,0,5)", class = "sd")))
 
 saveRDS(randord.brms2.vid, "randord_brms2_vid.RDS")
 
@@ -28,9 +28,9 @@ saveRDS(randord.brms2.vid, "randord_brms2_vid.RDS")
 randord.brms2.pen = brm(comfort_rating_ordered ~ (1|person_ID) + . - person_ID - video_names, 
                         data=d.remodel.int, 
                         family=cumulative("logit"), iter = 2000,
-                        set_prior("horseshoe(1)", class = "b"),
-                        set_prior("student_t(3,0,5)", class = "Intercept"),
-                        set_prior("student_t(3,0,5)", class = "sd"))
+                        prior = c(set_prior("horseshoe(1)", class = "b"),
+                                  set_prior("student_t(3,0,5)", class = "Intercept"),
+                                  set_prior("student_t(3,0,5)", class = "sd")))
 
 saveRDS(randord.brms2.pen, "randordbrms2_pen.RDS")
 

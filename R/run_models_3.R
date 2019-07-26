@@ -25,7 +25,7 @@ randord.brms3.vid = brm(comfort_rating_ordered ~ (1|person_ID) + (1|video_name) 
 saveRDS(randord.brms3.vid, "randord_brms3_vid.RDS")
 
 # # Model with person-level random effects, xclusive coefficient set + interactions-+ SHRINKAGE prior -- 
-randord.brms3.pen = brm(comfort_rating_ordered ~ (1|person_ID) + . - person_ID - video_names, 
+randord.brms3.pen = brm(comfort_rating_ordered ~ (1|person_ID) + . - person_ID - video_name, 
                         data=d.remodel.int2, 
                         family=cumulative("logit"), iter = 2000,
                         prior = c(set_prior("horseshoe(1)", class = "b"),

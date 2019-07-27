@@ -7,7 +7,7 @@ int_per_horse = brm(comfort_rating_ordered ~ . + (1|person_ID) - person_ID - vid
                     data=d.remodel.int, 
                     family=cumulative("logit"), iter = 2000,
                     chains = nchains,
-                    cores - nchains,
+                    cores = nchains,
                     control = list(adapt_delta = 0.9),
                     prior = c(set_prior("horseshoe(1)", class = "b"), 
                               set_prior("student_t(3,0,5)", class = "Intercept"),

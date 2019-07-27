@@ -1,5 +1,4 @@
 nchains = 3
-options("mc.cores" = min(parallel::detectCores(), nchains))
 load("to_5i_jul_26.RData")
 library(brms)
 
@@ -8,6 +7,7 @@ null_per = brm(comfort_rating_ordered ~ (1|person_ID),
                    data=d.model, 
                    family=cumulative("logit"), iter = 2000,
                    chains = nchains,
+                   cores = nchains,
                    control = list(adapt_delta = 0.9),
                    prior = c(set_prior("student_t(3,0,5)", class = "Intercept"),
                              set_prior("student_t(3,0,5)", class = "sd"))
@@ -20,6 +20,7 @@ null_per_vid = brm(comfort_rating_ordered ~ (1|person_ID) + (1|video_name),
                data=d.model %>% mutate(video_name = d$video_name), 
                family=cumulative("logit"), iter = 2000,
                chains = nchains,
+               cores = nchains,
                control = list(adapt_delta = 0.9),
                prior = c(set_prior("student_t(3,0,5)", class = "Intercept"),
                          set_prior("student_t(3,0,5)", class = "sd"))

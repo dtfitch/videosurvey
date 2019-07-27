@@ -16,6 +16,7 @@ null_per = brm(comfort_rating_ordered ~ (1|person_ID),
 saveRDS(null_per, "null_per.RDS")
 
 # person + video random effects -- 
+library(dplyr)
 null_per_vid = brm(comfort_rating_ordered ~ (1|person_ID) + (1|video_name), 
                data=d.model %>% mutate(video_name = d$video_name), 
                family=cumulative("logit"), iter = 2000,

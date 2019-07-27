@@ -3,15 +3,14 @@
 # -----------------------------------------------------------------------------------
 #
 # Questions: ----
-# - How could table(d$bike_speed_mph_ST) get to 51 and 61 mph? e.g. https://youtu.be/OpZ-zH7HD6o
-# - Levels: L, Q, C, 4 ??
-#
+# - Levels: L, Q, C, 4 ?? <-- uue to ordered input. check back on ordered contrasts
+# (- How could table(d$bike_speed_mph_ST) get to 51 and 61 mph? e.g. https://youtu.be/OpZ-zH7HD6o <- removed this var)
 #
 # To do: ----
+# - We didn’t get as change to look at which videos had high random effects but I’ll do that when everything’s done, in part to to see if there are any interaction effects that seem obviously lacking. 
 # - random effects in ordered logit
 #     - do we want a stronger prior? Is additive correct?
 #     - consider category-speciric effects or priors for any terms? (see brms JSS paper)
-# - horeshoe prior on model terms? (like penalized)
 # - linear vs non.linear effects of variables? What I'm seeing with interactions may indicate transformations needed.
 #
 # - try a "kid 17 or under" treating NA as no kids and see if any effect
@@ -19,11 +18,8 @@
 # speed limit groups = 25,  30 - 35, 45-50 (chosed based on speed group and where their prevailing speeds seem to be)
 # don't include prevail either on it's own or as a difference with speed
   # prevailing speed (which would be harder for planners, and it's unclear how it's calculated, plus the car it was calculated on might be cut out of our snipped). MAYBE include prevail - speed.
-    # see if outside lane width comes back -- try it as a class variable, less or more than 10ft ->
+    # see if outside lane width comes back -- try it as a class variable?, less or more than 10ft ->
     # might be individative how much vehicle traffic and how fast they're going
-# ONE MODEL with individual and video-level features
-  # counterfactual prediction to show those differences
-# - add random effect for video to brm
 
 # Notes: ----
 #     1. So far nothing major has come from looking at interaction effects. What I'm seeing may indicate that the effects of opinion variables are non-linear (if still treating that as numeric, not as factors)
@@ -43,6 +39,7 @@
 #       (2)  "bike_operating_space" the key measurement variable to use
 #       The trick with bike_operating_space is that the effect should be non-linear. For example, on a slow speed mixed traffic (bike and cars in same lane), operating space will be 0, but the road is likely to be relatively comfortable compared to a major arterial. However, when traffic speeds and volumes are high, more operating space should equal more comfort. Does that make sense? So i guess what I'm saying is I expect an interaction between operating space and our new speed limit variable. 
 
+# -----------------------------------------------------------------------------------------------------------------------------------------------------------
 # 0. Setup ####
 #   Packages ----
 #library(MASS)
@@ -641,28 +638,28 @@ d %>% group_by(video_name) %>%
 
 summary(lm(d.video$var ~ d.video$median_comfort))
 #         - build and scale (all on 0-1) model frames: ----
-#          + Inclusive coefficient set: ----All levels of selected coefficients ----
+#             + (DEPRECATED) Inclusive coefficient set: ----All levels of selected coefficients ----
 
-d.remodel = d.model %>% 
-                select(-"comfort_rating") %>%
-                select(-c("num_lanes_ST", "primary_role", "child_u18", "divided_road_ST", 
-                       "pavement_condition_ST")) %>% #<- could try adding some of these back in 
-                mutate(person_ID = as.factor(person_ID),
-                       video_name = as.factor(d$video_name),
-                       veh_volume2_ST = as.ordered(veh_volume2_ST),
-                       comfort_four_no_lane = as.ordered(comfort_four_no_lane),
-                       street_parking_ST = as.factor(street_parking_ST)) %>%
-                #rest of numeric vars get put on 0-1 scale
-                mutate_at(vars(contains("op")), function(x) {x/5}) %>%
-                mutate_at(names(.)[which(sapply(., function(x) {is.numeric(x) && max(x, na.rm = T) > 1}))], 
-                          function(x) {(x - min(x, na.rm = T))/max(x - min(x, na.rm = T), na.rm = T)}) %>%
-                #so we don't have to lose this data and respect "NA" responses:
-                mutate(female = as.factor(replace(female, is.na(female), "NA")))
-str(d.remodel)
-
-#         - scaling (put all on 0-1 scale by subtracting min and dividing by max) 
-
-d.remodel = d.remodel %>% mutate_if(is.numeric, function(x) {(x-min(x, na.rm = T))/max(x - min(x, na.rm = T), na.rm = T)})
+# d.remodel = d.model %>% 
+#                 select(-"comfort_rating") %>%
+#                 select(-c("num_lanes_ST", "primary_role", "child_u18", "divided_road_ST", 
+#                        "pavement_condition_ST")) %>% #<- could try adding some of these back in 
+#                 mutate(person_ID = as.factor(person_ID),
+#                        video_name = as.factor(d$video_name),
+#                        veh_volume2_ST = as.ordered(veh_volume2_ST),
+#                        comfort_four_no_lane = as.ordered(comfort_four_no_lane),
+#                        street_parking_ST = as.factor(street_parking_ST)) %>%
+#                 #rest of numeric vars get put on 0-1 scale
+#                 mutate_at(vars(contains("op")), function(x) {x/5}) %>%
+#                 mutate_at(names(.)[which(sapply(., function(x) {is.numeric(x) && max(x, na.rm = T) > 1}))], 
+#                           function(x) {(x - min(x, na.rm = T))/max(x - min(x, na.rm = T), na.rm = T)}) %>%
+#                 #so we don't have to lose this data and respect "NA" responses:
+#                 mutate(female = as.factor(replace(female, is.na(female), "NA")))
+# str(d.remodel)
+# 
+# #         - scaling (put all on 0-1 scale by subtracting min and dividing by max) 
+# 
+# d.remodel = d.remodel %>% mutate_if(is.numeric, function(x) {(x-min(x, na.rm = T))/max(x - min(x, na.rm = T), na.rm = T)})
 
 
 # Full scaling (decided on scaling as above instead)
@@ -674,67 +671,191 @@ d.remodel = d.remodel %>% mutate_if(is.numeric, function(x) {(x-min(x, na.rm = T
 #   d.remodel.df$comfort_rating_ordered = d.model$comfort_rating_ordered[rowSums(is.na(d.remodel))==0]
 #   d.remodel.df$video_name = d$video_name[rowSums(is.na(d.remodel))==0]
 
-#          + Exclusive coefficient set -- only top effects from penalized ordinal model and hardcoded ineractions ----
+#             + (DEPRECATED) Exclusive coefficient set -- only top fx from pen. ord. model and hardcoded ineractions ----
 
 # may only include some levels of certain factors
 
-str(d.model.int)
-dim(d.model.int)
+# str(d.model.int)
+# dim(d.model.int)
+# 
+# d.remodel.int = d.model.int %>% 
+#   mutate_if(is.numeric, function(x) {(x-min(x, na.rm = T))/max(x - min(x, na.rm = T), na.rm = T)}) %>%
+#   mutate(person_ID = as.factor(ord.prelim$model$person_ID),
+#          video_name = as.factor(ord.prelim$model$video_name))
+# 
+# #         - scaling (put all on 0-1 scale by subtracting min and dividing by max) 
+# 
+# d.remodel.int = d.remodel.int %>% mutate_if(is.numeric, function(x) {(x-min(x, na.rm = T))/max(x - min(x, na.rm = T), na.rm = T)})
 
-d.remodel.int = d.model.int %>% 
-  mutate_if(is.numeric, function(x) {(x-min(x, na.rm = T))/max(x - min(x, na.rm = T), na.rm = T)}) %>%
-  mutate(person_ID = as.factor(ord.prelim$model$person_ID),
-         video_name = as.factor(ord.prelim$model$video_name))
+
+#             + (DEPRECATED) Exclusive coefficient set+ interactions: ----
+# 
+# d.remodel.int2 = data.frame(glmcr.int$x[,top.names.int %in% colnames(glmcr.int$x)]) %>%
+#   mutate(person_ID = as.factor(ord.prelim$model$person_ID),
+#          video_name = as.factor(ord.prelim$model$video_name),
+#          comfort_rating_ordered = ord.prelim$model$comfort_rating_ordered)
+# 
+# #         - scaling (put all on 0-1 scale by subtracting min and dividing by max) 
+# 
+# d.remodel.int2 = d.remodel.int2 %>% mutate_if(is.numeric, function(x) {(x-min(x, na.rm = T))/max(x - min(x, na.rm = T), na.rm = T)})
+
+#          + Main effects set: Built after looking at random effects models and merging "inclusive" & "exclusive" sets: ----
+
+d.remodel.me = d.model %>%
+                select(-"comfort_rating") %>%
+                select(-c("num_lanes_ST", "primary_role", "child_u18", "divided_road_ST",
+                       "pavement_condition_ST")) %>% #<- could try adding some of these back in
+                mutate(person_ID = as.factor(person_ID),
+                       video_name = as.factor(d$video_name),
+                       #create this variable before converting components
+                       veh_vol_non0_opspace_0_ST = as.numeric(veh_volume2_ST > 1 &  
+                                                                bike_operating_space_ST < 3),
+                       veh_volume2_ST = as.factor(veh_volume2_ST),
+                       comfort_four_no_lane = as.factor(comfort_four_no_lane),
+                       street_parking_ST = as.factor(street_parking_ST),
+                       
+                       #reorder to keep bike level later
+                       usual_mode_4lev = factor(usual_mode_4lev, rev(levels(usual_mode_4lev) )) ) %>%
+                #rest of numeric vars get put on 0-1 scale
+                mutate_at(vars(contains("op")), function(x) {x/5}) %>%
+                mutate_at(names(.)[which(sapply(., function(x) {is.numeric(x) && max(x, na.rm = T) > 1}))],
+                          function(x) {(x - min(x, na.rm = T))/max(x - min(x, na.rm = T), na.rm = T)}) %>%
+                #so we don't have to lose this data and respect "NA" responses:
+                mutate(female = as.factor(replace(female, is.na(female), "NA")))
+
+d.remodel.me = data.frame(model.matrix(comfort_rating_ordered ~ . - person_ID - video_name, data = d.remodel.me),
+                          comfort_rating_ordered = 
+                            model.frame(comfort_rating_ordered ~ . - person_ID - video_name, data = d.remodel.me)$comfort_rating_ordered,
+                          person_ID = 
+                            model.frame(person_ID ~ . - comfort_rating_ordered - video_name, data = d.remodel.me)$person_ID,
+                          video_name = 
+                            model.frame(video_name ~ . - comfort_rating_ordered - person_ID, data = d.remodel.me)$video_name
+                          )
+
+d.remodel.me = d.remodel.me %>% select(-c("X.Intercept.", "femaleNA","usual_mode_4levCar", "usual_mode_4levPublic.Trans"))
+str(d.remodel.me)
+
+#         - scaling (put all on 0-1 scale by subtracting min and dividing by max)
+
+d.remodel.me = d.remodel.me %>% mutate_if(is.numeric, function(x) {(x-min(x, na.rm = T))/max(x - min(x, na.rm = T), na.rm = T)})
+str(d.remodel.me)
+
+#          + Main effects set + interactions: ----
+
+ord.int = MASS::polr(comfort_rating_ordered ~ . -video_name - person_ID +   
+                              # consider interactions 
+                              street_parking_ST1:bike_lane_SUM_ST1 +
+                              street_parking_ST1:bike_lane_SUM_ST2 +
+                              street_parking_ST1:bike_operating_space_ST + 
+                              # we decided to only interact on highest level of volume
+                              veh_volume2_ST3:bike_lane_SUM_ST1 +
+                              veh_volume2_ST3:bike_lane_SUM_ST2 +
+                              # have veh_vol_non0_opspace_0_ST instead:
+                                # veh_volume2_ST3:bike_operating_space_ST +
+                              speed_limit_mph_ST_3lev.40.50.:bike_lane_SUM_ST1 +
+                              speed_limit_mph_ST_3lev.40.50.:bike_lane_SUM_ST2 +
+                              speed_limit_mph_ST_3lev.40.50.:outside_lane_width_ft_ST +
+                              speed_limit_mph_ST_3lev.40.50.:bike_operating_space_ST,
+                            #speed_prevail_minus_limit_ST:bike_lane_SUM_ST1 +
+                            #speed_prevail_minus_limit_ST:bike_lane_SUM_ST2 +
+                            #speed_prevail_minus_limit_ST:bike_operating_space_ST,
+                            data = d.remodel.me, Hess = TRUE)
+summary(ord.int)
+
+d.remodel.int = data.frame(model.matrix(ord.int)[,-1],
+                           person_ID = as.factor(ord.int$model$person_ID),
+                           video_name = as.factor(ord.int$model$video_name),
+                           comfort_rating_ordered = ord.int$model$comfort_rating_ordered)
+str(d.remodel.int)
 
 #         - scaling (put all on 0-1 scale by subtracting min and dividing by max) 
 
-d.remodel.int = d.remodel.int %>% mutate_if(is.numeric, function(x) {(x-min(x, na.rm = T))/max(x - min(x, na.rm = T), na.rm = T)})
-
-#          + Exclusive coefficient set + interactions: ----
-
-d.remodel.int2 = data.frame(glmcr.int$x[,top.names.int %in% colnames(glmcr.int$x)]) %>%
-                    mutate(person_ID = as.factor(ord.prelim$model$person_ID),
-                          video_name = as.factor(ord.prelim$model$video_name))
-
-#         - scaling (put all on 0-1 scale by subtracting min and dividing by max) 
-
-d.remodel.int2 = d.remodel.int2 %>% mutate_if(is.numeric, function(x) {(x-min(x, na.rm = T))/max(x - min(x, na.rm = T), na.rm = T)})
+d.remodel.int = d.remodel.int %>% mutate_if(is.numeric, 
+                function(x) {(x-min(x, na.rm = T))/max(x - min(x, na.rm = T), na.rm = T)})
 
  
 #     - i. RUN MODELS  ----
 
-# Inclusive coefficient set-- 
-source("R/run_models_1.R")
-# exclusive coefficient set: just top effects discovered before -- 
-source("R/run_models_2.R")
-# exclusive coefficient set + interactions-
-source("R/run_models_3.R")
+# (DEPRECATED scripts) ----
+# # Inclusive coefficient set-- source("R/run_models_1.R")
+# # exclusive coefficient set: just top effects discovered before -- ource("R/run_models_2.R")
+# # exclusive coefficient set + interactions-source("R/run_models_3.R")
 
 #         + LOAD MODELS AS NECESARY ----
 
-#         + quick evaluate output ----
+# Inclusive coefficient set
+randord.brms = readRDS("R/model_output_box/randord_brms.RDS")
+randord.brms.pen = readRDS("R/model_output_box/randord_brms_pen.RDS")
+randord.brms.vid = readRDS("R/model_output_box/randord_brms_vid.RDS")
+
+# exclusive coefficient set: just top effects discovered before -- 
+randord.brms2 = readRDS("R/model_output_box/randord_brms2.RDS")
+randord.brms2.pen = readRDS("R/model_output_box/randord_brms2_pen.RDS")
+randord.brms2.vid = readRDS("R/model_output_box/randord_brms2_vid.RDS")
+
+# exclusive coefficient set + interactions-
+randord.brms3 = readRDS("R/model_output_box/randord_brms3.RDS")
+randord.brms3.pen = readRDS("R/model_output_box/randord_brms3_pen.RDS")
+randord.brms3.vid = readRDS("R/model_output_box/randord_brms3_vid.RDS")
+
+
+#         - Evaluate output ----
+
+# Quick summary
 summary(randord.brms)
 plot(randord.brms)
-#
+
+# Compare coefficients sets
+
+# basic
 post.randord.brms = as.array(randord.brms)
 post.randord.brms2 = as.array(randord.brms2)
 post.randord.brms3 = as.array(randord.brms3)
-post.randord.brms.pen = as.array(randord.brms.pen)
-post.randord.brms3.pen = as.array(randord.brms3.pen)
 
 randord.brm.plotgrid = plot_grid(
-bayesplot::mcmc_intervals(post.randord.brms, pars = dimnames(post.randord.brms)$parameters[!grepl(dimnames(post.randord.brms)$parameters, pattern = "person_ID|lp__")], prob_outer = .95),
+  bayesplot::mcmc_intervals(post.randord.brms, pars = dimnames(post.randord.brms)$parameters[!grepl(dimnames(post.randord.brms)$parameters, pattern = "person_ID|lp__")], prob_outer = .95) + geom_vline(aes(xintercept = 0)),
+  
+  bayesplot::mcmc_intervals(post.randord.brms2, pars = dimnames(post.randord.brms2)$parameters[!grepl(dimnames(post.randord.brms2)$parameters, pattern = "person_ID|lp__")], prob_outer = .95) + geom_vline(aes(xintercept = 0)),
+  
+  bayesplot::mcmc_intervals(post.randord.brms3, pars = dimnames(post.randord.brms3)$parameters[!grepl(dimnames(post.randord.brms3)$parameters, pattern = "person_ID|lp__")], prob_outer = .95) + geom_vline(aes(xintercept = 0))
+  )
 
-bayesplot::mcmc_intervals(post.randord.brms2, pars = dimnames(post.randord.brms2)$parameters[!grepl(dimnames(post.randord.brms2)$parameters, pattern = "person_ID|lp__")], prob_outer = .95) + geom_vline(aes(xintercept = 0)),
+# horshoe prior
+post.randord.brms.pen = as.array(randord.brms.pen)
+post.randord.brms2.pen = as.array(randord.brms2.pen)
+post.randord.brms3.pen = as.array(randord.brms3.pen)
 
-bayesplot::mcmc_intervals(post.randord.brms3, pars = dimnames(post.randord.brms3)$parameters[!grepl(dimnames(post.randord.brms3)$parameters, pattern = "person_ID|lp__")], prob_outer = .95) + geom_vline(aes(xintercept = 0)),
+randord.brm.plotgrid.pen = plot_grid(
+  bayesplot::mcmc_intervals(post.randord.brms.pen, pars = dimnames(post.randord.brms.pen)$parameters[!grepl(dimnames(post.randord.brms.pen)$parameters, pattern = "person_ID|lp__")], prob_outer = .95) + geom_vline(aes(xintercept = 0)),
+  
+  bayesplot::mcmc_intervals(post.randord.brms2.pen, pars = dimnames(post.randord.brms2.pen)$parameters[!grepl(dimnames(post.randord.brms2.pen)$parameters, pattern = "person_ID|lp__")], prob_outer = .95) + geom_vline(aes(xintercept = 0)),
+  
+  bayesplot::mcmc_intervals(post.randord.brms3.pen, pars = dimnames(post.randord.brms3.pen)$parameters[!grepl(dimnames(post.randord.brms3.pen)$parameters, pattern = "person_ID|lp__")], prob_outer = .95) + geom_vline(aes(xintercept = 0))
+, nrow = 1)
 
-bayesplot::mcmc_intervals(post.randord.brms.pen, pars = dimnames(post.randord.brms.pen)$parameters[!grepl(dimnames(post.randord.brms.pen)$parameters, pattern = "person_ID|lp__")], prob_outer = .95) + geom_vline(aes(xintercept = 0)),
+# video random effects
 
-bayesplot::mcmc_intervals(post.randord.brms3.pen, pars = dimnames(post.randord.brms3.pen)$parameters[!grepl(dimnames(post.randord.brms3.pen)$parameters, pattern = "person_ID|lp__")], prob_outer = .95) + geom_vline(aes(xintercept = 0))
-)
+post.randord.brms.vid = as.array(randord.brms.vid)
+post.randord.brms2.vid = as.array(randord.brms2.vid)
+post.randord.brms3.vid = as.array(randord.brms3.vid)
 
-ggsave("IMG/brms_plot_grid", plot = randord.brm.plotgrid, height = 16)
+randord.brm.plotgrid.vid = plot_grid(
+  bayesplot::mcmc_intervals(post.randord.brms.vid, pars = dimnames(post.randord.brms.vid)$parameters[!grepl(dimnames(post.randord.brms.vid)$parameters, pattern = "person_ID|lp__|video_name")], prob_outer = .95) + geom_vline(aes(xintercept = 0)),
+  
+  bayesplot::mcmc_intervals(post.randord.brms2.vid, pars = dimnames(post.randord.brms2.vid)$parameters[!grepl(dimnames(post.randord.brms2.vid)$parameters, pattern = "person_ID|lp__|video_name")], prob_outer = .95) + geom_vline(aes(xintercept = 0)),
+  
+  bayesplot::mcmc_intervals(post.randord.brms3.vid, pars = dimnames(post.randord.brms3.vid)$parameters[!grepl(dimnames(post.randord.brms3.vid)$parameters, pattern = "person_ID|lp__|video_name")], prob_outer = .95) + geom_vline(aes(xintercept = 0))
+  , nrow = 2)
+
+#brmstools::forest(randord.brms.vid, grouping = 2)
+
+randord.brm.plotgrid.vid.re = plot_grid(
+  bayesplot::mcmc_intervals(post.randord.brms.vid, pars = dimnames(post.randord.brms.vid)$parameters[!grepl(dimnames(post.randord.brms.vid)$parameters, pattern = "person_ID|lp__|b")], prob_outer = .95, ) + geom_vline(aes(xintercept = 0)),
+  
+  bayesplot::mcmc_intervals(post.randord.brms2.vid, pars = dimnames(post.randord.brms2.vid)$parameters[!grepl(dimnames(post.randord.brms2.vid)$parameters, pattern = "person_ID|lp__|b_")], prob_outer = .95) + geom_vline(aes(xintercept = 0)),
+  
+  bayesplot::mcmc_intervals(post.randord.brms3.vid, pars = dimnames(post.randord.brms3.vid)$parameters[!grepl(dimnames(post.randord.brms3.vid)$parameters, pattern = "person_ID|lp__|b_")], prob_outer = .95) + geom_vline(aes(xintercept = 0))
+  , nrow = 2)
 
 # methods(class = "brmsfit")
 # standata(randord.brms) 

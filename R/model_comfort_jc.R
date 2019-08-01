@@ -50,6 +50,8 @@ library(forcats)
 library(ggridges)
 library(shinystan)
 library(cowplot)
+library(rpart)
+library(rpart.plot)
 
 #   Other ----
 setwd("~/Documents/videosurvey")
@@ -165,20 +167,6 @@ d$child6 = as.numeric(as.character(d$child6))
 d$child615 = as.numeric(as.character(d$child615))
 d$child1617 = as.numeric(as.character(d$child1617))
 d$child_u18 = rowSums(d[,c('child6', 'child615', 'child1617')], na.rm = T) > 0 # treats NAs as zeros  
-
-# [1] "Bike"                                                                               
-# [2] "Bus"                                                                                
-# [3] "Carpool or vanpool with others also going to campus (either as driver or passenger)"
-# [4] "Drive alone in a car (or other vehicle)"                                            
-# [5] "Electric bike"                                                                      
-# [6] "Get a ride (someone drops you off and continues on elsewhere)"                      
-# [7] "Motorcycle or scooter"                                                              
-# [8] "Other:"                                                                             
-# [9] "Skate or skateboard"                                                                
-# [10] "Taxi services"                                                                      
-# [11] "Train or light rail"                                                                
-# [12] "Uber or Lyft Services"                                                              
-# [13] "Walk"  
 
 #   Combine vars ----
 
@@ -502,6 +490,7 @@ plot(glmcr.prelim$dev.ratio)
 s = 23 # isolate top effects (incl two levels of bike land) 
 # This model is more parsimonious, the effects make sense, and it's backed up by the
 # elbow of the deviance plot
+plot.glmnetcr(glmcr.prelim) 
 round(nonzero.glmnetcr(glmcr.prelim, s = s)$beta, 3)
 top.names = names(nonzero.glmnetcr(glmcr.prelim, s = s)$beta)
 top.names = top.names[!grepl(top.names, pattern = "cp[0-9]{1}")]           
@@ -534,8 +523,6 @@ d.model.int = data.frame(glmcr.prelim2$x) %>% mutate(
 
 # As with models, most of what comes out is relationships between street variables and opinions related to biking
 
-library(rpart)
-library(rpart.plot)
 #Set response type
 mf3 = model.frame( as.numeric(comfort_rating_ordered) > 3 ~ ., 
                    data = data.frame(d.model.int))

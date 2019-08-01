@@ -5,20 +5,21 @@ library(brms)
 library(ggplot2)
 library(bayesplot)
 library(rstan)
+library(dplyr)
 
 path.to.models = "/Users/jac/Box/Video_CTS/Github/videosurvey/R/"
 
 # LOAD MODELS AS NECESARY ----
 
 # Null models
-# null_per = readRDS(file.path(path.to.models, "null_per"))
-# null_per_vid = readRDS(file.path(path.to.models, "null_per_vid"))
+# null_per = readRDS(file.path(path.to.models, "null_per.RDS"))
+# null_per_vid = readRDS(file.path(path.to.models, "null_per_vid.RDS"))
 
 # Main effects 
 # me_per = readRDS(file.path(path.to.models, "me_per.RDS"))
 # me_per_horse = readRDS(file.path(path.to.models, "me_per.RDS"))
 # me_per_vid = readRDS(file.path(path.to.models, "me_per.RDS"))
-# me_per_vid_horse = readRDS(file.path(path.to.models, "me_perv"))
+# me_per_vid_horse = readRDS(file.path(path.to.models, "me_perv.RDS"))
 # 
 # # Main effects + interaction effects
 # int_per = readRDS(file.path(path.to.models, "int_per.RDS"))
@@ -31,6 +32,7 @@ path.to.models = "/Users/jac/Box/Video_CTS/Github/videosurvey/R/"
 
 #model1 = readRDS(file.path(path.to.models, "me_per.RDS"))
 model1 = readRDS(file.path(path.to.models, "me_per_vid.RDS"))
+#model1 = readRDS(file.path(path.to.models, "null_per_vid.RDS"))
 
 # Quick summary
 summary(model1)
@@ -50,6 +52,9 @@ mcmc_intervals(model1.array, pars = dimnames(model1.array)$parameters[!grepl(dim
 mcmc_intervals(model1.array, pars = dimnames(model1.array)$parameters[!grepl(dimnames(model1.array)$parameters, pattern = "person_ID|lp__|b_")], prob_outer = .95) + 
   geom_vline(aes(xintercept = 0))
 
+View(d %>% group_by(video_name) %>% 
+       summarize(first(URL), first(veh_volume2_ST), first(veh_volume_ST), first(divided_road_ST),
+                 first(bike_operating_space_ST), first(divided_road_ST)))
 
 # Plot random effects
 

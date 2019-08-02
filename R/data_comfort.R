@@ -4,10 +4,17 @@
 # Jane Carlen, May 2019
 
 # Data questions for Dillon;
-# 1. Why so many blank entries in the child fields? Why a few "Nones" in addition to zeros? (free-entry fields?)
+# 1. Why so many blank entries in the child fields? Why a few "Nones" in addition to zeros? 
+#   ans: free-entry fields
 # 2. Coding of hh_composition? Conflicting levels selected. Using rent_share as a hh composition type variable because it has least missing data nad is still somewhat discriptive of household type
 # 3. Are blocked bike lanes really blocked? (https://youtu.be/LI0m8h3jVJ4, https://youtu.be/XAKiJ78Z8uE)
-
+#   ans: probably due to cropping down from longer variable, didn't use this variable -- only two streets potentially even blocked in longer video
+# 4. Are there errors in three-level vehicle volume variable? Seem to be
+#    Note "low" seems to be 2-4 vehicles w/ at most two in direction of bike, high is 5 or more
+#     - 4th_VirginiaDelaware https://youtu.be/grzzIoYCN-c none --- should be --> low
+#     - Broadway_GoldenGateLakeTemescal https://youtu.be/UR4BjyiPlY4 low --> none
+#     - Sloat35_CreastlakeGabilan https://youtu.be/Hek_CqLZk2A high --> low
+#     - SanPabloDam WildcattoOldSanPabloDam https://youtu.be/OpZ-zH7HD6o this one is borderline high but I left it bc 4 cars close together all in direction of bike, all pass bike
 # 0. Setup ----
 
 library(ggplot2)
@@ -42,6 +49,11 @@ names(d)[(which(names(d) == "video_name")+1):ncol(d)] = paste0(names(d)[(which(n
 
 #   Remove some redunant vars ----
 d <- d %>% select(-street_divided_ST)
+
+#   Fix volume2 var ----
+d[d$video_name == "4th_VirginiaDelaware", "veh_volume2_ST"] = "low"
+d[d$video_name == "Broadway_GoldenGateLakeTemescal", "veh_volume2_ST"] = "none"
+d[d$video_name == "Sloat35_CreastlakeGabilan", "veh_volume2_ST"] = "low"
 
 #   Reduce factors for some variables ----
 d <- d %>% 

@@ -17,7 +17,7 @@ path.to.models = "/Users/jac/Box/Video_CTS/Github/videosurvey/R/"
 
 # Main effects 
 # me_per = readRDS(file.path(path.to.models, "me_per.RDS"))
-# me_per_horse = readRDS(file.path(path.to.models, "me_per.RDS"))
+# me_per_horse = readRDS(file.path(path.to.models, "me_per_horse.RDS"))
 # me_per_vid = readRDS(file.path(path.to.models, "me_per.RDS"))
 # me_per_vid_horse = readRDS(file.path(path.to.models, "me_perv.RDS"))
 # 
@@ -30,9 +30,13 @@ path.to.models = "/Users/jac/Box/Video_CTS/Github/videosurvey/R/"
 
 #         - Evaluate output ----
 
-#model1 = readRDS(file.path(path.to.models, "me_per.RDS"))
-model1 = readRDS(file.path(path.to.models, "me_per_vid.RDS"))
 #model1 = readRDS(file.path(path.to.models, "null_per_vid.RDS"))
+
+model1 = readRDS(file.path(path.to.models, "me_per.RDS"))
+#model1 = readRDS(file.path(path.to.models, "me_per_vid.RDS"))
+#model1 = readRDS(file.path(path.to.models, "me_per_vid_horse.RDS"))
+
+model1 = readRDS(file.path(path.to.models, "int_per.RDS"))
 
 # Quick summary
 summary(model1)
@@ -42,92 +46,35 @@ check_hmc_diagnostics(model1$fit)
 
 # View coefficients
 model1.array = as.array(model1)
-# with video random effects
-mcmc_intervals(model1.array, pars = dimnames(model1.array)$parameters[!grepl(dimnames(model1.array)$parameters, pattern = "person_ID|lp__")], prob_outer = .95) + 
-  geom_vline(aes(xintercept = 0))
-# without video random effects
+
+# coefficients without video random effects
 mcmc_intervals(model1.array, pars = dimnames(model1.array)$parameters[!grepl(dimnames(model1.array)$parameters, pattern = "person_ID|lp__|r_")], prob_outer = .95) + 
   geom_vline(aes(xintercept = 0))
+
 # only video random effects
 mcmc_intervals(model1.array, pars = dimnames(model1.array)$parameters[!grepl(dimnames(model1.array)$parameters, pattern = "person_ID|lp__|b_")], prob_outer = .95) + 
   geom_vline(aes(xintercept = 0))
 
+# Look at videos with large random effects
 View(d %>% group_by(video_name) %>% 
        summarize(first(URL), first(veh_volume2_ST), first(veh_volume_ST), first(divided_road_ST),
                  first(bike_operating_space_ST), first(divided_road_ST)))
 
-# Plot random effects
-
-
-# basic
-me_per = as.array(me_per)
-me_per_vid = as.array(randord.brms2)
-me_per_vid_horse = as.array(randord.brms3)
-
-randord.brm.plotgrid = plot_grid(
-  bayesplot::mcmc_intervals(me_per, pars = dimnames(me_per)$parameters[!grepl(dimnames(me_per)$parameters, pattern = "person_ID|lp__")], prob_outer = .95) + geom_vline(aes(xintercept = 0)),
-  
-  bayesplot::mcmc_intervals(me_per_vid, pars = dimnames(me_per_vid)$parameters[!grepl(dimnames(me_per_vid)$parameters, pattern = "person_ID|lp__")], prob_outer = .95) + geom_vline(aes(xintercept = 0)),
-  
-  bayesplot::mcmc_intervals(post.randord.brms3, pars = dimnames(post.randord.brms3)$parameters[!grepl(dimnames(post.randord.brms3)$parameters, pattern = "person_ID|lp__")], prob_outer = .95) + geom_vline(aes(xintercept = 0))
-)
-
-# horshoe prior
-post.randord.brms.pen = as.array(randord.brms.pen)
-post.randord.brms2.pen = as.array(randord.brms2.pen)
-post.randord.brms3.pen = as.array(randord.brms3.pen)
-
-randord.brm.plotgrid.pen = plot_grid(
-  bayesplot::mcmc_intervals(post.randord.brms.pen, pars = dimnames(post.randord.brms.pen)$parameters[!grepl(dimnames(post.randord.brms.pen)$parameters, pattern = "person_ID|lp__")], prob_outer = .95) + geom_vline(aes(xintercept = 0)),
-  
-  bayesplot::mcmc_intervals(post.randord.brms2.pen, pars = dimnames(post.randord.brms2.pen)$parameters[!grepl(dimnames(post.randord.brms2.pen)$parameters, pattern = "person_ID|lp__")], prob_outer = .95) + geom_vline(aes(xintercept = 0)),
-  
-  bayesplot::mcmc_intervals(post.randord.brms3.pen, pars = dimnames(post.randord.brms3.pen)$parameters[!grepl(dimnames(post.randord.brms3.pen)$parameters, pattern = "person_ID|lp__")], prob_outer = .95) + geom_vline(aes(xintercept = 0))
-  , nrow = 1)
-
-# video random effects
-
-post.randord.brms.vid = as.array(randord.brms.vid)
-post.randord.brms2.vid = as.array(randord.brms2.vid)
-post.randord.brms3.vid = as.array(randord.brms3.vid)
-
-randord.brm.plotgrid.vid = plot_grid(
-  bayesplot::mcmc_intervals(post.randord.brms.vid, pars = dimnames(post.randord.brms.vid)$parameters[!grepl(dimnames(post.randord.brms.vid)$parameters, pattern = "person_ID|lp__|video_name")], prob_outer = .95) + geom_vline(aes(xintercept = 0)),
-  
-  bayesplot::mcmc_intervals(post.randord.brms2.vid, pars = dimnames(post.randord.brms2.vid)$parameters[!grepl(dimnames(post.randord.brms2.vid)$parameters, pattern = "person_ID|lp__|video_name")], prob_outer = .95) + geom_vline(aes(xintercept = 0)),
-  
-  bayesplot::mcmc_intervals(post.randord.brms3.vid, pars = dimnames(post.randord.brms3.vid)$parameters[!grepl(dimnames(post.randord.brms3.vid)$parameters, pattern = "person_ID|lp__|video_name")], prob_outer = .95) + geom_vline(aes(xintercept = 0))
-  , nrow = 2)
-
-#brmstools::forest(randord.brms.vid, grouping = 2)
-
-randord.brm.plotgrid.vid.re = plot_grid(
-  bayesplot::mcmc_intervals(post.randord.brms.vid, pars = dimnames(post.randord.brms.vid)$parameters[!grepl(dimnames(post.randord.brms.vid)$parameters, pattern = "person_ID|lp__|b")], prob_outer = .95, ) + geom_vline(aes(xintercept = 0)),
-  
-  bayesplot::mcmc_intervals(post.randord.brms2.vid, pars = dimnames(post.randord.brms2.vid)$parameters[!grepl(dimnames(post.randord.brms2.vid)$parameters, pattern = "person_ID|lp__|b_")], prob_outer = .95) + geom_vline(aes(xintercept = 0)),
-  
-  bayesplot::mcmc_intervals(post.randord.brms3.vid, pars = dimnames(post.randord.brms3.vid)$parameters[!grepl(dimnames(post.randord.brms3.vid)$parameters, pattern = "person_ID|lp__|b_")], prob_outer = .95) + geom_vline(aes(xintercept = 0))
-  , nrow = 2)
-
-# methods(class = "brmsfit")
-# standata(randord.brms) 
-# marginal_effects(randord.brms) #makes me realize potential weirdness of scaling factor variabes. Better approach?
-# launch_shinystan(randord.brms)
-
 #         + Predictions ----
 
-# Single
-predict(randord.brms, newdata = d.remodel[1,])
+# Single data point -- stochastic
+predict(model1, newdata = model1$data[1,]) 
+
 # Overall
-randord.brms.predict = predict(randord.brms) #posterior probs of each class with randomness
-randord.brms.predict.ev =  randord.brms.predict %*% c(1:7)
+model1.predict = predict(model1) #posterior probs of each class with randomness
+model1.predict.ev =  model1.predict %*% c(1:7)
 # version of residuals
-hist(randord.brms.predict.ev - as.numeric(randord.brms$data$comfort_rating_ordered)) 
+hist(model1.predict.ev - as.numeric(model1$data$comfort_rating_ordered)) 
 
 #         + Random Effects ----
 
 # Many large person-level random effects -- do we want a more restrictive prior?
-pi.samples = posterior_samples(randord.brms, pars = "person_ID")
+pi.samples = posterior_samples(model1, pars = "person_ID")
 pi.means = apply(pi.samples, 2, mean)
 hist(pi.means); summary(pi.means)
 hist(apply(pi.samples, 2, median), breaks = 20)

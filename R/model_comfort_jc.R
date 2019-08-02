@@ -475,9 +475,10 @@ summary(lm.prelim)
 #     - Ordered response (OK) ----
 
 ord.prelim = MASS::polr(comfort_rating_ordered ~ . - comfort_rating - person_ID - video_name, 
-                        #comfort 4lane seems to have non-linear effect (noticed after considering interactions):
                         data = d.model %>%  
+                          # comfort 4lane and video volume seems to have non-linear effects
                           mutate(comfort_four_no_lane = as.factor(comfort_four_no_lane),
+                                 veh_volume2_ST = as.factor(veh_volume2_ST),
                                  video_name = d$video_name), #<- for later 
                         Hess = TRUE)
 summary(ord.prelim)
@@ -485,12 +486,12 @@ summary(ord.prelim)
 #     - Penalized ordered response (GLMNET, lasso) ----
 
 glmcr.prelim = glmnetcr(x = model.matrix(ord.prelim)[,-1], y = model.frame(ord.prelim)$comfort_rating_ordered)
-par(mai  = c(1,1,1,3))
+par(mfrow = c(1,1))
 plot(glmcr.prelim$dev.ratio)
-s = 23 # isolate top effects (incl two levels of bike land) 
-# This model is more parsimonious, the effects make sense, and it's backed up by the
-# elbow of the deviance plot
+par(mai  = c(1,1,1,3))
 plot.glmnetcr(glmcr.prelim) 
+s = 26 # isolate top effects (incl two levels of bike land) 
+# This model is more parsimonious (23 var), the effects make sense, and it's backed up by the elbow of the deviance plot
 round(nonzero.glmnetcr(glmcr.prelim, s = s)$beta, 3)
 top.names = names(nonzero.glmnetcr(glmcr.prelim, s = s)$beta)
 top.names = top.names[!grepl(top.names, pattern = "cp[0-9]{1}")]           
@@ -506,14 +507,13 @@ dev.off()
 
 
 #     Models allowing main AND interaction effects ----
-
 #     - Hard-coding some potential interactions ----
 
 round(prop.table(table(d$comfort_rating_3lev, d$bike_operating_space_ST, d$veh_volume2_ST), c(2,3)), 2)
 
 d.model.int = data.frame(glmcr.prelim2$x) %>% mutate(
   comfort_rating_ordered = glmcr.prelim2$y,
-  veh_vol_non0_opspace_0_ST = as.numeric(veh_volume2_ST > 1 &  bike_operating_space_ST < 3)
+  veh_vol_non0_opspace_0_ST = as.numeric((veh_volume2_ST2 > 0|veh_volume2_ST3 > 0) &  bike_operating_space_ST < 3)
   # add one for speed and operating space?
   # street_park_opsace_low = street_parking_ST == 1 & bike_operating_space_ST < 8
   )
@@ -556,13 +556,17 @@ ord.prelim.int = MASS::polr(comfort_rating_ordered ~ . +
                             street_parking_ST:bike_lane_SUM_ST1 +
                             street_parking_ST:bike_lane_SUM_ST2 +
                             street_parking_ST:bike_operating_space_ST + 
-                            veh_volume2_ST:bike_lane_SUM_ST1 +
-                            veh_volume2_ST:bike_lane_SUM_ST2 +
-                            veh_volume2_ST:bike_operating_space_ST +
-                            speed_limit_mph_ST_3lev.40.50.:bike_lane_SUM_ST1 +
-                            speed_limit_mph_ST_3lev.40.50.:bike_lane_SUM_ST2 +
-                            speed_limit_mph_ST_3lev.40.50.:outside_lane_width_ft_ST +
-                            speed_limit_mph_ST_3lev.40.50.:bike_operating_space_ST,
+                            veh_volume2_ST3:bike_lane_SUM_ST1 +
+                            veh_volume2_ST3:bike_lane_SUM_ST2 +
+                            # have veh_vol_non0_opspace_0_ST instead:
+                             #veh_volume2_ST3:bike_operating_space_ST +
+                            #speed_limit_mph_ST_3lev.40.50.:bike_lane_SUM_ST1 + <- only one street in the 45-50 range doesn't have a bike lane, and none are protected
+                            #speed_limit_mph_ST_3lev.40.50.:bike_lane_SUM_ST2 +
+                            #speed_limit_mph_ST_3lev.40.50.:outside_lane_width_ft_ST + # <- not significant here or in RandEff models
+                            speed_limit_mph_ST_3lev.40.50.:bike_operating_space_ST +
+                            speed_limit_mph_ST_3lev.40.50.:veh_volume2_ST3 +
+                            speed_limit_mph_ST_3lev.30.40.:veh_volume2_ST3
+                           , 
                             #speed_prevail_minus_limit_ST:bike_lane_SUM_ST1 +
                             #speed_prevail_minus_limit_ST:bike_lane_SUM_ST2 +
                             #speed_prevail_minus_limit_ST:bike_operating_space_ST,
@@ -573,19 +577,17 @@ summary(ord.prelim.int)
 
 # Still see some weird flips of main effects
 glmcr.int = glmnetcr(x = model.matrix(ord.prelim.int)[,-1], y = ord.prelim.int$model$comfort_rating_ordered)
-plot.glmnetcr(glmcr.int) 
-s = 25
+s = 30
 round(nonzero.glmnetcr(glmcr.int, s = s)$beta, 3)
 plot(glmcr.int$dev.ratio)
+#plot.glmnetcr(glmcr.int)  #slow
 top.names.int = names(nonzero.glmnetcr(glmcr.int, s = s)$beta)
 top.names.int = top.names.int[!grepl(top.names.int, pattern = "cp[0-9]{1}")]           
 top.names.int
 
 # ----------------------------------------------------------------------------------
-# 5. Mixed models with person random effects ---------------------------
-
-#     - BRMS: Ordered logit with person random effects ####
-#         + Exploratory: Figure out how to account for between vs. within in the model ----
+# 5. Mixed models with person random effects (BRMS) ---------------------------
+#       + Exploratory: Figure out how to account for between vs. within in the model ----
   
   #--- Note: blocks don't reprsent between or within selections (as I has thought), rather they represent types of videos ("loosely based on bike infrastructure, whether the road was a collector or arterial, and speed/traffic of cars")
   # so a video is always in the same block, but the person may see it as within (i.e. they only see it with other videos in the same block [in which case they have uniform block_ID]), or between (e.g  the only see it with other videos NOT within the same block[in which case they have no duplicated block_ID]). The block corresponds to broad road type, but the video_group is just an experimental variable. There should roughly be balance across blob and video_group. clear as mud?
@@ -624,73 +626,12 @@ d %>% group_by(video_name) %>%
             n = n()) %>% arrange(var)
 
 summary(lm(d.video$var ~ d.video$median_comfort))
-#         - build and scale (all on 0-1) model frames: ----
-#             + (DEPRECATED) Inclusive coefficient set: ----All levels of selected coefficients ----
-
-# d.remodel = d.model %>% 
-#                 select(-"comfort_rating") %>%
-#                 select(-c("num_lanes_ST", "primary_role", "child_u18", "divided_road_ST", 
-#                        "pavement_condition_ST")) %>% #<- could try adding some of these back in 
-#                 mutate(person_ID = as.factor(person_ID),
-#                        video_name = as.factor(d$video_name),
-#                        veh_volume2_ST = as.ordered(veh_volume2_ST),
-#                        comfort_four_no_lane = as.ordered(comfort_four_no_lane),
-#                        street_parking_ST = as.factor(street_parking_ST)) %>%
-#                 #rest of numeric vars get put on 0-1 scale
-#                 mutate_at(vars(contains("op")), function(x) {x/5}) %>%
-#                 mutate_at(names(.)[which(sapply(., function(x) {is.numeric(x) && max(x, na.rm = T) > 1}))], 
-#                           function(x) {(x - min(x, na.rm = T))/max(x - min(x, na.rm = T), na.rm = T)}) %>%
-#                 #so we don't have to lose this data and respect "NA" responses:
-#                 mutate(female = as.factor(replace(female, is.na(female), "NA")))
-# str(d.remodel)
-# 
-# #         - scaling (put all on 0-1 scale by subtracting min and dividing by max) 
-# 
-# d.remodel = d.remodel %>% mutate_if(is.numeric, function(x) {(x-min(x, na.rm = T))/max(x - min(x, na.rm = T), na.rm = T)})
-
-
-# Full scaling (decided on scaling as above instead)
-# d.remodel.mat = cbind(
-#    apply(d.remodel.mat[,-which(colnames(d.remodel.mat)=="person_ID")], 2, scale, center = TRUE, scale = T), 
-#    person_ID = d.remodel.mat[,which(colnames(d.remodel.mat)=="person_ID")]) #had to exclude person_ID from scaling
-#  
-#   d.remodel.df = data.frame(d.remodel.mat)
-#   d.remodel.df$comfort_rating_ordered = d.model$comfort_rating_ordered[rowSums(is.na(d.remodel))==0]
-#   d.remodel.df$video_name = d$video_name[rowSums(is.na(d.remodel))==0]
-
-#             + (DEPRECATED) Exclusive coefficient set -- only top fx from pen. ord. model and hardcoded ineractions ----
-
-# may only include some levels of certain factors
-
-# str(d.model.int)
-# dim(d.model.int)
-# 
-# d.remodel.int = d.model.int %>% 
-#   mutate_if(is.numeric, function(x) {(x-min(x, na.rm = T))/max(x - min(x, na.rm = T), na.rm = T)}) %>%
-#   mutate(person_ID = as.factor(ord.prelim$model$person_ID),
-#          video_name = as.factor(ord.prelim$model$video_name))
-# 
-# #         - scaling (put all on 0-1 scale by subtracting min and dividing by max) 
-# 
-# d.remodel.int = d.remodel.int %>% mutate_if(is.numeric, function(x) {(x-min(x, na.rm = T))/max(x - min(x, na.rm = T), na.rm = T)})
-
-
-#             + (DEPRECATED) Exclusive coefficient set+ interactions: ----
-# 
-# d.remodel.int2 = data.frame(glmcr.int$x[,top.names.int %in% colnames(glmcr.int$x)]) %>%
-#   mutate(person_ID = as.factor(ord.prelim$model$person_ID),
-#          video_name = as.factor(ord.prelim$model$video_name),
-#          comfort_rating_ordered = ord.prelim$model$comfort_rating_ordered)
-# 
-# #         - scaling (put all on 0-1 scale by subtracting min and dividing by max) 
-# 
-# d.remodel.int2 = d.remodel.int2 %>% mutate_if(is.numeric, function(x) {(x-min(x, na.rm = T))/max(x - min(x, na.rm = T), na.rm = T)})
-
+#       - build and scale (all on 0-1) model frames: ----
 #          + Main effects set: Built after looking at random effects models and merging "inclusive" & "exclusive" sets: ----
 
 d.remodel.me = d.model %>%
                 select(-"comfort_rating") %>%
-                select(-c("num_lanes_ST", "primary_role", "child_u18", "divided_road_ST",
+                select(-c("num_lanes_ST", "primary_role", "divided_road_ST",
                        "pavement_condition_ST")) %>% #<- could try adding some of these back in
                 mutate(person_ID = as.factor(person_ID),
                        video_name = as.factor(d$video_name),
@@ -739,10 +680,13 @@ ord.int = MASS::polr(comfort_rating_ordered ~ . -video_name - person_ID +
                               veh_volume2_ST3:bike_lane_SUM_ST2 +
                               # have veh_vol_non0_opspace_0_ST instead:
                                 # veh_volume2_ST3:bike_operating_space_ST +
-                              speed_limit_mph_ST_3lev.40.50.:bike_lane_SUM_ST1 +
-                              speed_limit_mph_ST_3lev.40.50.:bike_lane_SUM_ST2 +
-                              speed_limit_mph_ST_3lev.40.50.:outside_lane_width_ft_ST +
-                              speed_limit_mph_ST_3lev.40.50.:bike_operating_space_ST,
+                              # speed_limit_mph_ST_3lev.40.50.:bike_lane_SUM_ST1 + <- only one street in the 45-50 range doesn't have a bike lane, and none are protected
+                              # speed_limit_mph_ST_3lev.40.50.:bike_lane_SUM_ST2 +
+                              # speed_limit_mph_ST_3lev.40.50.:outside_lane_width_ft_ST + <- mean ~0 with wide var. in rand.eff model
+                              speed_limit_mph_ST_3lev.40.50.:bike_operating_space_ST +
+                              speed_limit_mph_ST_3lev.40.50.:veh_volume2_ST3 + # <- new
+                              speed_limit_mph_ST_3lev.30.40.:veh_volume2_ST3 # <- new
+                       ,
                             #speed_prevail_minus_limit_ST:bike_lane_SUM_ST1 +
                             #speed_prevail_minus_limit_ST:bike_lane_SUM_ST2 +
                             #speed_prevail_minus_limit_ST:bike_operating_space_ST,
@@ -761,7 +705,70 @@ d.remodel.int = d.remodel.int %>% mutate_if(is.numeric,
                 function(x) {(x-min(x, na.rm = T))/max(x - min(x, na.rm = T), na.rm = T)})
 
  
-#     - i. RUN MODELS  ----
+#          + (DEPRECATED) ----
+#                 + (X) Inclusive coefficient set: ----All levels of selected coefficients ----
+
+# d.remodel = d.model %>% 
+#                 select(-"comfort_rating") %>%
+#                 select(-c("num_lanes_ST", "primary_role", "child_u18", "divided_road_ST", 
+#                        "pavement_condition_ST")) %>% #<- could try adding some of these back in 
+#                 mutate(person_ID = as.factor(person_ID),
+#                        video_name = as.factor(d$video_name),
+#                        veh_volume2_ST = as.ordered(veh_volume2_ST),
+#                        comfort_four_no_lane = as.ordered(comfort_four_no_lane),
+#                        street_parking_ST = as.factor(street_parking_ST)) %>%
+#                 #rest of numeric vars get put on 0-1 scale
+#                 mutate_at(vars(contains("op")), function(x) {x/5}) %>%
+#                 mutate_at(names(.)[which(sapply(., function(x) {is.numeric(x) && max(x, na.rm = T) > 1}))], 
+#                           function(x) {(x - min(x, na.rm = T))/max(x - min(x, na.rm = T), na.rm = T)}) %>%
+#                 #so we don't have to lose this data and respect "NA" responses:
+#                 mutate(female = as.factor(replace(female, is.na(female), "NA")))
+# str(d.remodel)
+# 
+# #         - scaling (put all on 0-1 scale by subtracting min and dividing by max) 
+# 
+# d.remodel = d.remodel %>% mutate_if(is.numeric, function(x) {(x-min(x, na.rm = T))/max(x - min(x, na.rm = T), na.rm = T)})
+
+
+# Full scaling (decided on scaling as above instead)
+# d.remodel.mat = cbind(
+#    apply(d.remodel.mat[,-which(colnames(d.remodel.mat)=="person_ID")], 2, scale, center = TRUE, scale = T), 
+#    person_ID = d.remodel.mat[,which(colnames(d.remodel.mat)=="person_ID")]) #had to exclude person_ID from scaling
+#  
+#   d.remodel.df = data.frame(d.remodel.mat)
+#   d.remodel.df$comfort_rating_ordered = d.model$comfort_rating_ordered[rowSums(is.na(d.remodel))==0]
+#   d.remodel.df$video_name = d$video_name[rowSums(is.na(d.remodel))==0]
+
+#                 + (X) Exclusive coefficient set -- only top fx from pen. ord. model and hardcoded ineractions ----
+
+# may only include some levels of certain factors
+
+# str(d.model.int)
+# dim(d.model.int)
+# 
+# d.remodel.int = d.model.int %>% 
+#   mutate_if(is.numeric, function(x) {(x-min(x, na.rm = T))/max(x - min(x, na.rm = T), na.rm = T)}) %>%
+#   mutate(person_ID = as.factor(ord.prelim$model$person_ID),
+#          video_name = as.factor(ord.prelim$model$video_name))
+# 
+# #         - scaling (put all on 0-1 scale by subtracting min and dividing by max) 
+# 
+# d.remodel.int = d.remodel.int %>% mutate_if(is.numeric, function(x) {(x-min(x, na.rm = T))/max(x - min(x, na.rm = T), na.rm = T)})
+
+
+#                 + (X) Exclusive coefficient set+ interactions: ----
+# 
+# d.remodel.int2 = data.frame(glmcr.int$x[,top.names.int %in% colnames(glmcr.int$x)]) %>%
+#   mutate(person_ID = as.factor(ord.prelim$model$person_ID),
+#          video_name = as.factor(ord.prelim$model$video_name),
+#          comfort_rating_ordered = ord.prelim$model$comfort_rating_ordered)
+# 
+# #         - scaling (put all on 0-1 scale by subtracting min and dividing by max) 
+# 
+# d.remodel.int2 = d.remodel.int2 %>% mutate_if(is.numeric, function(x) {(x-min(x, na.rm = T))/max(x - min(x, na.rm = T), na.rm = T)})
+
+# -------------------------------------------------------------------------------------
+#  RUN MODELS ON DYLAN'S DESKTOP  - SEE analysis_comfort.R for output of models and analysis of output ***----
 
 # do on dylan's desktop:
 # for (file in list.files("R", pattern = "null|int_per_|me_per_")) {
@@ -772,9 +779,6 @@ d.remodel.int = d.remodel.int %>% mutate_if(is.numeric,
 # # Inclusive coefficient set-- source("R/run_models_1.R")
 # # exclusive coefficient set: just top effects discovered before -- ource("R/run_models_2.R")
 # # exclusive coefficient set + interactions-source("R/run_models_3.R")
-
-# -------------------------------------------------------------------------------------
-# **** SEE analysis_comfort.R for output of models and analysis of output *** ----
 
 # -------------------------------------------------------------------------------------
 # ------------------------------ xx. Scratch -----------------------------------------

@@ -10,7 +10,7 @@
 # 3. Are blocked bike lanes really blocked? (https://youtu.be/LI0m8h3jVJ4, https://youtu.be/XAKiJ78Z8uE)
 #   ans: probably due to cropping down from longer variable, didn't use this variable -- only two streets potentially even blocked in longer video
 # 4. Are there errors in three-level vehicle volume variable? Seem to be
-#    Note "low" seems to be 2-4 vehicles w/ at most two in direction of bike, high is 5 or more
+#    Note "low" seems to be 1-4 vehicles w/ at most two going in direction of bike, high is 5 or more
 #     - 4th_VirginiaDelaware https://youtu.be/grzzIoYCN-c none --- should be --> low
 #     - Broadway_GoldenGateLakeTemescal https://youtu.be/UR4BjyiPlY4 low --> none
 #     - Sloat35_CreastlakeGabilan https://youtu.be/Hek_CqLZk2A high --> low

@@ -10,7 +10,7 @@ ncores = 15
 # the loo slot in the model object and saves the model again 
 
 models <- lapply(models,function(x) {
-  loo_tmp = loo::loo(x, reloo = T, ncores = ncores)
+  loo_tmp = loo::loo(x, reloo = T, cores = ncores)
   x$loo = loo_tmp
   return(x)
 })

@@ -1,15 +1,56 @@
 # Load and analyse output of models created in model_comfort_jc.R
 # 
+# Notes:
+# Didn't analyze models with horshoe prior
+# Have main and int, with and without video re, two nulls <- 6 total models
+#
+#
+# TO DO: 
+# run scenarios on sheets - try for me and int (since we have it) but we'll probably only display me model.
+#
+# ~5 ft for bike lane, ~7ft for protected bike land
+#individual cases:
+# means for attitudes
+#
+# veh_vol_non0_opspace_0_ST
+# bike_operating_space_ST  
+# street_parking_ST1
+# bike_lane_SUM_ST1 
+# bike_lane_SUM_ST2  
+# veh_volume2_ST3
+# bike_lane_SUM_ST2                   
+# speed_limit_mph_ST_3lev.40.50.
+# speed_limit_mph_ST_3lev.30.40.  
+#
+# pp_check, ppc_bars , e..g. pp_check(null2.loo, type = "bars", nsamples = "100")
+# brms tools forest for random effects
+# brmstools for coefficients?
+
+
 # Setup ----
 library(brms)
 library(ggplot2)
 library(bayesplot)
 library(rstan)
 library(dplyr)
+library(cowplot)
 
 path.to.models = "/Users/jac/Box/Video_CTS/Github/videosurvey/R/"
 
-# LOAD MODELS AS NECESARY ----
+
+# model loads ----
+
+models = readRDS("models_with_loo.RDS")
+names(models)
+
+int_per.array = as.array(models$int_per.RDS)
+int_per_vid.array = as.array(models$int_per_vid.RDS)
+me_per.array = as.array(models$me_per.RDS)
+me_per_vid.array = as.array(models$me_per_vid.RDS)
+
+null_per.array = as.array(models$null_per.RDS)
+
+#   (DEPRECATED) individual model loads  ----
 
 # Null models
 # null_per = readRDS(file.path(path.to.models, "null_per.RDS"))
@@ -23,42 +64,73 @@ path.to.models = "/Users/jac/Box/Video_CTS/Github/videosurvey/R/"
 # 
 # # Main effects + interaction effects
 # int_per = readRDS(file.path(path.to.models, "int_per.RDS"))
-# int_per_horse = readRDS(file.path(path.to.models, "int_per.RDS"))
-# int_per_vid = readRDS(file.path(path.to.models, "int_per.RDS"))
-# int_per_vid_horse = readRDS(file.path(path.to.models, "int_per.RDS"))
+# int_per_horse = readRDS(file.path(path.to.models, "int_per_horse.RDS"))
+# int_per_vid = readRDS(file.path(path.to.models, "int_per_vid.RDS"))
+# int_per_vid_horse = readRDS(file.path(path.to.models, "int_pe_vid_horse.RDS"))
 
+# Compare loo ----
+
+loo_compare("me_per.RDS" = models$me_per.RDS$loo, 
+            "me_per_vid.RDS" = models$me_per_vid.RDS$loo, 
+            "int_per.RDS" =models$int_per.RDS$loo, 
+            "int_per_vid.RDS" = models$int_per_vid.RDS$loo, 
+            null_per_loo2,
+            null_per_vid_loo2)
 
 #         - Evaluate output ----
 
-#model1 = readRDS(file.path(path.to.models, "null_per_vid.RDS"))
 
-model1 = readRDS(file.path(path.to.models, "me_per.RDS"))
-#model1 = readRDS(file.path(path.to.models, "me_per_vid.RDS"))
-#model1 = readRDS(file.path(path.to.models, "me_per_vid_horse.RDS"))
+null_per_vid.array = as.array(models$null_per_vid.RDS)
 
-model1 = readRDS(file.path(path.to.models, "int_per.RDS"))
+# [1] "int_per.RDS"      "int_per_vid.RDS"  "me_per.RDS"       "me_per_vid.RDS"   "null_per.RDS"     "null_per_vid.RDS"
 
 # Quick summary
-summary(model1)
+summary(models$int_per.RDS)
 
 # Diagnostics
-check_hmc_diagnostics(model1$fit)
+check_hmc_diagnostics(models$null_per$fit)
+sapply(models, loo)
 
 # View coefficients
-model1.array = as.array(model1)
 
 # coefficients without video random effects
-mcmc_intervals(model1.array, pars = dimnames(model1.array)$parameters[!grepl(dimnames(model1.array)$parameters, pattern = "person_ID|lp__|r_")], prob_outer = .95) + 
+mcmc_intervals(int_per_vid.array, pars = dimnames(model1.array)$parameters[!grepl(dimnames(model1.array)$parameters, pattern = "person_ID|lp__|r_")], prob_outer = .95) + 
   geom_vline(aes(xintercept = 0))
 
 # only video random effects
-mcmc_intervals(model1.array, pars = dimnames(model1.array)$parameters[!grepl(dimnames(model1.array)$parameters, pattern = "person_ID|lp__|b_")], prob_outer = .95) + 
+mcmc_intervals(int_per_vid.array, pars = dimnames(model1.array)$parameters[!grepl(dimnames(model1.array)$parameters, pattern = "person_ID|lp__|b_")], prob_outer = .95) + 
   geom_vline(aes(xintercept = 0))
 
 # Look at videos with large random effects
 View(d %>% group_by(video_name) %>% 
-       summarize(first(URL), first(veh_volume2_ST), first(veh_volume_ST), first(divided_road_ST),
-                 first(bike_operating_space_ST), first(divided_road_ST)))
+       summarize(first(URL), first(veh_volume2_ST),first(bike_lane_SUM_ST),
+                 first(bike_operating_space_ST), first(speed_limit_mph_ST), first(bike_speed_mph_ST)))
+
+# Compare two model coefficients
+
+model2.array = as.array(models$int_per_vid.RDS)
+
+# coefficients without video random effects
+plot_grid(
+mcmc_intervals(me_per.array, pars = dimnames(me_per.array)$parameters[!grepl(dimnames(me_per.array)$parameters, pattern = "person_ID|lp__|r_")], prob_outer = .95) + 
+  geom_vline(aes(xintercept = 0)),
+mcmc_intervals(int_per.array, pars = dimnames(int_per.array)$parameters[!grepl(dimnames(int_per.array)$parameters, pattern = "person_ID|lp__|r_|hs_c2")], prob_outer = .95) + 
+  geom_vline(aes(xintercept = 0)), 
+mcmc_intervals(me_per_vid.array, pars = dimnames(me_per_vid.array)$parameters[!grepl(dimnames(me_per_vid.array)$parameters, pattern = "person_ID|lp__|r_|hs_c2")], prob_outer = .95) + 
+  geom_vline(aes(xintercept = 0)),
+mcmc_intervals(int_per_vid.array, pars = dimnames(int_per_vid.array)$parameters[!grepl(dimnames(int_per_vid.array)$parameters, pattern = "person_ID|lp__|r_|hs_c2")], prob_outer = .95) + 
+  geom_vline(aes(xintercept = 0)), nrow = 2
+)
+
+
+# just video random effects
+plot_grid(
+mcmc_intervals(me_per_vid.array, pars = dimnames(me_per_vid.array)$parameters[!grepl(dimnames(me_per_vid.array)$parameters, pattern = "person_ID|lp__|b_")], prob_outer = .95) + 
+  geom_vline(aes(xintercept = 0)),
+mcmc_intervals(int_per_vid.array, pars = dimnames(int_per_vid.array)$parameters[!grepl(dimnames(int_per_vid.array)$parameters, pattern = "person_ID|lp__|b_")], prob_outer = .95) + 
+  geom_vline(aes(xintercept = 0))
+)
+
 
 #         + Predictions ----
 

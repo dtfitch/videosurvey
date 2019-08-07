@@ -16,3 +16,12 @@ models <- lapply(models,function(x) {
 })
 
 saveRDS(models, file = "models_with_loo.RDS")
+
+# Caculate loo for null models on data set from effect models that is slightly reduced
+
+null_loo_reduced_data <- list(
+  null_per_loo2 = loo::loo(readRDS("null_per.RDS"), newdata = models$null_per.RDS$data[which(models$null_per.RDS$data$person_ID %in% models$int_per.RDS$data$person_ID),]),
+  null_per_vid_loo2 = loo::loo(readRDS("null_per_vid.RDS"), newdata = models$null_per_vid.RDS$data[which(models$null_per_vid.RDS$data$person_ID %in% models$int_per.RDS$data$person_ID),])
+)
+
+saveRDS(null_loo_reduced_data, file = "null_loo_reduced_data.RDS")

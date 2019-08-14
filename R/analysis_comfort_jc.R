@@ -302,60 +302,60 @@ names(interactions) = interaction.terms
 
 all_counterfactuals = data.frame(all_counterfactuals, interactions)
 
-    #   Get fitted values (model specific) ----
+    #   Get and save fitted values (model specific) ----
 
-# created fitted.names from example
+#example
 x = data.frame(c(bad_attidudes, high_ability_comfort, young_childless_male, collector_bad)) #note this doesn't have a person_ID
 predict(models$me_per, newdata = x, re_formula = NA) 
 fitted(models$me_per, newdata = x, re_formula = NA)
+
+# created fitted.names from example
 fitted.names = as.vector(outer(colnames(fitted(models$me_per, newdata = x, re_formula = NA)),
                                colnames(fitted(models$me_per, newdata = x, re_formula = NA)[,,]), 
                                "paste"))
 
-#c("int_per_vid", "me_per_vid"),
-
-models_per.fitted = lapply(c("int_per", "me_per", "null_per"), function(model_name) {
+make_models_fitted = function(model_name) {
   
   cat("calculating for ", model_name)
   
   all_counterfactuals.fitted = sapply(1:nrow(all_counterfactuals), function(x) {
-  fitted(models[[model_name]], newdata = all_counterfactuals[x,], re_formula = NA)
+    fitted(models[[model_name]], newdata = all_counterfactuals[x,], re_formula = NA)
   })
   all_counterfactuals.fitted = data.frame(t(all_counterfactuals.fitted))
   names(all_counterfactuals.fitted) = fitted.names
   all_counterfactuals.fitted$rowID = 1:nrow(all_counterfactuals.fitted)
   all_counterfactuals.fitted.melt = reshape2::melt(all_counterfactuals.fitted, id.vars = "rowID")
-
+  
   all_counterfactuals = full_join(all_counterfactuals, all_counterfactuals.fitted.melt, by = "rowID")
   all_counterfactuals = all_counterfactuals %>% mutate(class = interaction(attitude, ability_comfort, road_environment))
   all_counterfactuals$road_type =  sapply(as.character(all_counterfactuals$road_environment), "switch",
-                                        arterial_bad = "arterial",
-                                        arterial_mid = "arterial",
-                                        arterial_good = "arterial",
-                                        collector_bad = "collector",
-                                        collector_good = "collector",
-                                        local_road_bad = "local_road",
-                                        local_road_good = "local_road")      
+                                          arterial_bad = "arterial",
+                                          arterial_mid = "arterial",
+                                          arterial_good = "arterial",
+                                          collector_bad = "collector",
+                                          collector_good = "collector",
+                                          local_road_bad = "local_road",
+                                          local_road_good = "local_road")      
   return(all_counterfactuals)
-})
+}
+
+models_per.fitted = lapply(c("int_per", "me_per", "null_per"), make_models_fitted)
 names(models_per.fitted) = c("int_per", "me_per", "null_per")
 
+models_per_vid.fitted = lapply(c("int_per_vid", "me_per_vid", "null_per_vid"), make_models_fitted)
+names(models_per_vid.fitted) = c("int_per_vid", "me_per_vid", "null_per_vid")
 
+models_fitted = c(models_per.fitted, models_per_vid.fitted)
 
-model_name = "me_per_vid"
-all_counterfactuals.fitted = sapply(1:nrow(all_counterfactuals), function(x) {
-  fitted(models[[model_name]], newdata = all_counterfactuals[x,], re_formula = NA)
-})
+#saveRDS(models_fitted, "models_fitted.RDS")
 
+    #     - Plot and save (model specific) ----
 
-
-    #   Plot (model specific) ----
-
-sapply(1:length(models_per.fitted), function(i) {
+sapply(1:length(models_fitted), function(i) {
   
-  all_counterfactuals = models_per.fitted[[i]]
-  model_name = names(models_per.fitted)[i]
-  if (model_name != "null_per") {
+  all_counterfactuals = models_fitted[[i]]
+  model_name = names(models_fitted)[i]
+  if (!model_name %in%  c("null_per", "null_per_vid")) {
     
   #   + plots by road type                        
   counterfactuals_by_road = split(all_counterfactuals, all_counterfactuals$road_type)
@@ -391,7 +391,7 @@ sapply(1:length(models_per.fitted), function(i) {
     theme(strip.text = element_text(size = 8),
         axis.text.x = element_text(angle = 45, hjust = 1))
   ggsave(file.path("/Users/jac/Box/Video_CTS/Report/IMG", model_name, "arterial_summary.png"),
-         width = 16, height = 12)
+         width = 20, height = 12)
 
   } else {
     ggplot( all_counterfactuals %>%
@@ -411,34 +411,59 @@ sapply(1:length(models_per.fitted), function(i) {
   
 })
 
-# add CI's? (probably only visible if we seperate individuals? also most of the errors are pretty small)
+
+# add CI's to plots? (probably only visible if we seperate individuals? also most of the errors are pretty small)
 
 
-  #   Tables (model specific) ----
+    #   Tables (model specific) ----
 
-all_counterfactuals.expected = lapply(models_per.fitted, function(x) {
-  x = filter(x, grepl("Estimate", variable)) %>% 
+
+all_counterfactuals.expected = lapply(models_fitted, function(x) {
+  y = filter(x, grepl("Estimate", variable)) %>% 
+  droplevels() %>%
+  mutate(variable = as.numeric(variable), tmp = variable*value) %>%
   group_by(class, road_environment, person) %>% 
-  summarize(expected_value = mean(value*1:7))
-  return(x)
+  summarize(expected_value = sum(tmp))
+  return(y)
 })
   
-tmp.table = left_join(all_counterfactuals.expected$int_per, 
+par(mfrow = c(1,2))
+
+# Models without video random effects
+
+model_fitted_per.table = left_join(all_counterfactuals.expected$int_per, 
           all_counterfactuals.expected$me_per, 
           by = c("class", "road_environment", "person"),
           suffix = c(".int_per", ".me_per"))
 
-plot(tmp.table$expected_value.int_per, tmp.table$expected_value.me_per, 
-     col = tmp.table$road_environment)
-legend("topleft", levels(tmp.table$road_environment), col = 1:7, pch = 16)
+plot(x = model_fitted_per.table$expected_value.int_per,
+     y = model_fitted_per.table$expected_value.me_per, 
+     col = model_fitted_per.table$road_environment,
+     xlab = "Interaction model", ylab = "Main effect model",
+     main = "Models without video random effects")
+legend("topleft", levels(model_fitted_per.table$road_environment), col = 1:7, pch = 16, bty = "n")
 abline(a = 0, b =1, lty = 3)
+points(all_counterfactuals.expected$null_per$expected_value[1], 
+       all_counterfactuals.expected$null_per$expected_value[1], pch  = "*", cex = 3)
 
-#   + plots -- all street types----
-# ggplot( all_counterfactuals %>% filter(grepl("Estimate", variable))) +
-#   geom_freqpoly(stat = "identity", aes(x = variable, y = value, group = person, color = person)) +
-#   facet_wrap(~class, nrow = 9) +
-#   theme_bw() + 
-#   theme(strip.text = element_text(size = 6))
+# Models with video random effects
+
+model_fitted_per_vid.table = left_join(all_counterfactuals.expected$int_per_vid, 
+                                   all_counterfactuals.expected$me_per_vid, 
+                                   by = c("class", "road_environment", "person"),
+                                   suffix = c(".int_per", ".me_per"))
+
+plot(x = model_fitted_per_vid.table$expected_value.int_per,
+     y = model_fitted_per_vid.table$expected_value.me_per, 
+     col = model_fitted_per.table$road_environment,
+     xlab = "Interaction model", ylab = "Main effect model",
+     main = "Models with video random effects")
+legend("topleft", levels(model_fitted_per.table$road_environment), col = 1:7, pch = 16, bty = "n")
+abline(a = 0, b =1, lty = 3)
+points(all_counterfactuals.expected$null_per_vid$expected_value[1], 
+       all_counterfactuals.expected$null_per_vid$expected_value[1], pch  = "*", cex = 3)
+
+
 
 # Predictions ----
 

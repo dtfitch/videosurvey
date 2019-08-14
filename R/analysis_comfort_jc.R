@@ -1,4 +1,4 @@
-# Load and analyse output of models created in model_comfort_jc.R
+# Load and analyse output of models created in model_comfort_jc.R -----
 # 
 # Notes:
 # Didn't analyze models with horshoe prior
@@ -25,9 +25,9 @@
 # pp_check, ppc_bars , e..g. pp_check(null2.loo, type = "bars", nsamples = "100")
 # brms tools forest for random effects
 # brmstools for coefficients?
+# ---------------------------------------------------------------------------------------------------------------
 
-
-# Setup ----
+# 0. Setup ----
 library(brms)
 library(ggplot2)
 library(bayesplot)
@@ -36,103 +36,411 @@ library(dplyr)
 library(cowplot)
 
 path.to.models = "/Users/jac/Box/Video_CTS/Github/videosurvey/R/"
+setwd(path.to.models)
+load("to_5i_jul_26.RData")
 
-
-# model loads ----
+# - Model loads ----
 
 models = readRDS("models_with_loo.RDS")
-names(models)
+names(models) = sapply(sapply(names(models), strsplit, "\\."), first)
 
-int_per.array = as.array(models$int_per.RDS)
-int_per_vid.array = as.array(models$int_per_vid.RDS)
-me_per.array = as.array(models$me_per.RDS)
-me_per_vid.array = as.array(models$me_per_vid.RDS)
+int_per.array = as.array(models$int_per)
+int_per_vid.array = as.array(models$int_per_vid)
+me_per.array = as.array(models$me_per)
+me_per_vid.array = as.array(models$me_per_vid)
 
-null_per.array = as.array(models$null_per.RDS)
+null_per.array = as.array(models$null_per)
+null_per_vid.array = as.array(models$null_per_vid)
+
+null_loo_reduced_data = readRDS("null_loo_reduced_data.RDS")
 
 #   (DEPRECATED) individual model loads  ----
+    
+    # Null models
+    # null_per = readRDS(file.path(path.to.models, "null_per.RDS"))
+    # null_per_vid = readRDS(file.path(path.to.models, "null_per_vid.RDS"))
+    
+    # Main effects 
+    # me_per = readRDS(file.path(path.to.models, "me_per.RDS"))
+    # me_per_horse = readRDS(file.path(path.to.models, "me_per_horse.RDS"))
+    # me_per_vid = readRDS(file.path(path.to.models, "me_per.RDS"))
+    # me_per_vid_horse = readRDS(file.path(path.to.models, "me_perv.RDS"))
+    # 
+    # # Main effects + interaction effects
+    # int_per = readRDS(file.path(path.to.models, "int_per.RDS"))
+    # int_per_horse = readRDS(file.path(path.to.models, "int_per_horse.RDS"))
+    # int_per_vid = readRDS(file.path(path.to.models, "int_per_vid.RDS"))
+    # int_per_vid_horse = readRDS(file.path(path.to.models, "int_pe_vid_horse.RDS"))
+    
+    
+# 1. Model diagnostics and summary ----
+    # 
+    #   - Compare loo ----
+    
+    loo_compare("me_per" = models$me_per$loo, 
+                "me_per_vid" = models$me_per_vid$loo, 
+                "int_per" =models$int_per$loo, 
+                "int_per_vid" = models$int_per_vid$loo, 
+                null_loo_reduced_data$null_per_loo2,
+                null_loo_reduced_data$null_per_vid_loo2)
+    
+    #   - Quick summary ----
+    summary(models$int_per)
+    
+    #   - Diagnostics ----
+    check_hmc_diagnostics(models$null_per$fit)
+    sapply(models, loo)
+    
+    #   - View coefficients ad random effects ----
+    
+    # coefficients without video random effects
+    mcmc_intervals(int_per_vid.array, pars = dimnames(model1.array)$parameters[!grepl(dimnames(model1.array)$parameters, pattern = "person_ID|lp__|r_")], prob_outer = .95) + 
+      geom_vline(aes(xintercept = 0))
+    
+    # only video random effects
+    mcmc_intervals(int_per_vid.array, pars = dimnames(model1.array)$parameters[!grepl(dimnames(model1.array)$parameters, pattern = "person_ID|lp__|b_")], prob_outer = .95) + 
+      geom_vline(aes(xintercept = 0))
+    
+    # Look at videos with large random effects
+    View(d %>% group_by(video_name) %>% 
+           summarize(first(URL), first(veh_volume2_ST),first(bike_lane_SUM_ST),
+                     first(bike_operating_space_ST), first(speed_limit_mph_ST), first(bike_speed_mph_ST)))
+    
+    # Compare two model coefficients
+    
+    model2.array = as.array(models$int_per_vid)
+    
+    # coefficients without video random effects
+    plot_grid(
+    mcmc_intervals(me_per.array, pars = dimnames(me_per.array)$parameters[!grepl(dimnames(me_per.array)$parameters, pattern = "person_ID|lp__|r_")], prob_outer = .95) + 
+      geom_vline(aes(xintercept = 0)),
+    mcmc_intervals(int_per.array, pars = dimnames(int_per.array)$parameters[!grepl(dimnames(int_per.array)$parameters, pattern = "person_ID|lp__|r_|hs_c2")], prob_outer = .95) + 
+      geom_vline(aes(xintercept = 0)), 
+    mcmc_intervals(me_per_vid.array, pars = dimnames(me_per_vid.array)$parameters[!grepl(dimnames(me_per_vid.array)$parameters, pattern = "person_ID|lp__|r_|hs_c2")], prob_outer = .95) + 
+      geom_vline(aes(xintercept = 0)),
+    mcmc_intervals(int_per_vid.array, pars = dimnames(int_per_vid.array)$parameters[!grepl(dimnames(int_per_vid.array)$parameters, pattern = "person_ID|lp__|r_|hs_c2")], prob_outer = .95) + 
+      geom_vline(aes(xintercept = 0)), nrow = 2
+    )
+    
+    
+    # just video random effects
+    plot_grid(
+    mcmc_intervals(me_per_vid.array, pars = dimnames(me_per_vid.array)$parameters[!grepl(dimnames(me_per_vid.array)$parameters, pattern = "person_ID|lp__|b_")], prob_outer = .95) + 
+      geom_vline(aes(xintercept = 0)),
+    mcmc_intervals(int_per_vid.array, pars = dimnames(int_per_vid.array)$parameters[!grepl(dimnames(int_per_vid.array)$parameters, pattern = "person_ID|lp__|b_")], prob_outer = .95) + 
+      geom_vline(aes(xintercept = 0))
+    )
+    
+    
+    
+# 2. Scenarios to understand coefficients ----
+    
+    # summary 
+    
+    str(models$me_per$data)
+    names(models$me_per$data)
+    
+    # create by-person data frame for finding quantiles accurately
+    d.scenario = models$me_per$data %>% group_by(person_ID) %>% select(-"comfort_rating_ordered") %>% summarize_all(first)
+    
+    #   Building blocks ----
+    #     - Individual-level ----
+    
+    #       + attitudes ----
+    
+    op_levels = data.frame(apply(d.scenario[,-1], 2, quantile, probs = c(.1,.5,.9)))
+    
+    low_pos_attitudes = c(op_like_biking = op_levels$op_like_biking[1], op_feel_safe = op_levels$op_feel_safe[1], op_like_transit = op_levels$op_like_transit[1])
+    mid_pos_attitudes = c(op_like_biking = op_levels$op_like_biking[2], op_feel_safe = op_levels$op_feel_safe[2], op_like_transit = op_levels$op_like_transit[2])
+    high_pos_attitudes = c(op_like_biking = op_levels$op_like_biking[3], op_feel_safe = op_levels$op_feel_safe[3], op_like_transit = op_levels$op_like_transit[3])
+    
+    low_neg_attitudes = c(op_need_car = op_levels$op_need_car[1], op_arrive_professional = op_levels$op_arrive_professional[1], op_travel_stress = op_levels$op_travel_stress[1])
+    mid_neg_attitudes = c(op_need_car = op_levels$op_need_car[2], op_arrive_professional = op_levels$op_arrive_professional[2], op_travel_stress = op_levels$op_travel_stress[2])
+    high_neg_attitudes = c(op_need_car = op_levels$op_need_car[3], op_arrive_professional = op_levels$op_arrive_professional[3], op_travel_stress = op_levels$op_travel_stress[3])
+    
+    bad_attidudes = c(low_pos_attitudes, high_neg_attitudes)
+    mid_attitudes = c(mid_pos_attitudes, mid_neg_attitudes)
+    good_attidudes = c(high_pos_attitudes, low_neg_attitudes)
+    
+    #       + ability + comfort ----
+    
+    table(d$usual_mode_4lev)
+    low_ability_comfort = data.frame(comfort_four_no_lane2=0, comfort_four_no_lane3=0, bike_ability=0, usual_mode_4levBike = 0)      
+    mid_ability_comfort = data.frame(comfort_four_no_lane2=1, comfort_four_no_lane3=0, bike_ability=.5, usual_mode_4levBike = 0) #<- should usual mode Bike be 1? About half in our survey ride bikes but much less in general population so I decided to stick with 0
+    high_ability_comfort = data.frame(comfort_four_no_lane2=0, comfort_four_no_lane3=1, bike_ability=1, usual_mode_4levBike = 1)    
+    
+    #       + demographic ----
+    range(d.person$age_impute)
+    agelevels = quantile(d.scenario$age_impute , c(.1,.8,.95), na.rm = T)
+    # On real scale
+    agelevels*(max(d.model$age_impute) - min(d.model$age_impute)) + min(d.model$age_impute)
+    # 10% 80% 95% 
+    # 20  34  57
+    young_childless_male = data.frame(age_impute = agelevels[1], child_u18TRUE = 0, female1 = 0)
+    midage_child_female = data.frame(age_impute = agelevels[2], child_u18TRUE = 1, female1 = 1)
+    old_childless_male = data.frame(age_impute = agelevels[3], child_u18TRUE = 0, female1 = 0)
+    old_childless_female = data.frame(age_impute = agelevels[3], child_u18TRUE = 0, female1 = 1)
+    
+    #     - Road environment ----
+    
+    speed_prevail_levels = quantile(models$me_per$data$speed_prevail_minus_limit_ST, c(.1,.5,.9))
+    speed_prevail_levels*(max(d.model$speed_prevail_minus_limit_ST) - min(d.model$speed_prevail_minus_limit_ST)) + min(d.model$speed_prevail_minus_limit_ST)
+    # 10% 50% 90% 
+    # -7   0   3 
+    
+    outside_lane_levels = quantile(models$me_per$data$outside_lane_width_ft_ST, c(.1,.5,.9))
+    outside_lane_levels*(max(d.model$outside_lane_width_ft_ST) - min(d.model$outside_lane_width_ft_ST)) + min(d.model$outside_lane_width_ft_ST)
+    #10% 50% 90% 
+    #10  11  13 
+    
+    bike_space_levels = quantile(models$me_per$data$bike_operating_space_ST, c(.1,.5,.9))
+    bike_space_levels*(max(d.model$bike_operating_space_ST) - min(d.model$bike_operating_space_ST)) + min(d.model$bike_operating_space_ST)
+    #10% 50% 90% 
+    #0   5  10 
+    
+    
+    local_road_good = data.frame(veh_volume2_ST2 = 0, veh_volume2_ST3 = 0, 
+                                 speed_limit_mph_ST_3lev.30.40. = 0, speed_limit_mph_ST_3lev.40.50. = 0, 
+                                 bike_lane_SUM_ST1 = 0, bike_lane_SUM_ST2 = 0, #local raods don't have bike lanes
+                                 speed_prevail_minus_limit_ST = speed_prevail_levels[1],  
+                                 street_parking_ST1 = 1, #local roads generally have street parking? 
+                                 outside_lane_width_ft_ST = outside_lane_levels[2], 
+                                 bike_operating_space_ST = bike_space_levels[2], 
+                                 veh_vol_non0_opspace_0_ST = 0) 
+    
+    local_road_bad = data.frame(veh_volume2_ST2 = 0, veh_volume2_ST3 = 0, 
+                                speed_limit_mph_ST_3lev.30.40. = 0, speed_limit_mph_ST_3lev.40.50. = 0,
+                                bike_lane_SUM_ST1 = 0, bike_lane_SUM_ST2 = 0, #local raods don't have bike lanes
+                                speed_prevail_minus_limit_ST = speed_prevail_levels[3], # <- only difference with local road good?
+                                street_parking_ST1 = 1, #local roads generally have street parking? 
+                                outside_lane_width_ft_ST = outside_lane_levels[2], 
+                                bike_operating_space_ST = bike_space_levels[2], 
+                                veh_vol_non0_opspace_0_ST = 0) 
+    
+    
+    collector_good = data.frame(veh_volume2_ST2 = 1, veh_volume2_ST3 = 0,
+                                speed_limit_mph_ST_3lev.30.40. = 1,  speed_limit_mph_ST_3lev.40.50. = 0,
+                                bike_lane_SUM_ST1 = 1, bike_lane_SUM_ST2 = 0, 
+                                speed_prevail_minus_limit_ST = speed_prevail_levels[1],  
+                                street_parking_ST1 = 1, #collectors generally have street parking? 
+                                outside_lane_width_ft_ST = outside_lane_levels[2],
+                                bike_operating_space_ST = bike_space_levels[3], 
+                                veh_vol_non0_opspace_0_ST = 0) 
+    
+    collector_bad = data.frame(veh_volume2_ST2 = 1, veh_volume2_ST3 = 0,
+                               speed_limit_mph_ST_3lev.30.40. = 1,  speed_limit_mph_ST_3lev.40.50. = 0,
+                               bike_lane_SUM_ST1 = 0, bike_lane_SUM_ST2 = 0,
+                               speed_prevail_minus_limit_ST = speed_prevail_levels[3],  
+                               street_parking_ST1 = 1, #collectors generally have street parking? 
+                               outside_lane_width_ft_ST = outside_lane_levels[2],
+                               bike_operating_space_ST = bike_space_levels[1], 
+                               veh_vol_non0_opspace_0_ST = 1) 
+    
+    
+    arterial_good = data.frame(veh_volume2_ST2 = 0, veh_volume2_ST3 = 1,
+                                speed_limit_mph_ST_3lev.30.40. = 1,  speed_limit_mph_ST_3lev.40.50. = 0,
+                                bike_lane_SUM_ST1 = 0, bike_lane_SUM_ST2 = 1,
+                                speed_prevail_minus_limit_ST = speed_prevail_levels[1],  
+                                street_parking_ST1 = 0, #arterials generally don't have street parking? 
+                                outside_lane_width_ft_ST = outside_lane_levels[1], #<- outside lane width effect is neg
+                                bike_operating_space_ST = bike_space_levels[3], 
+                                veh_vol_non0_opspace_0_ST = 0) 
+    
+    arterial_mid = data.frame(veh_volume2_ST2 = 0, veh_volume2_ST3 = 1,
+                               speed_limit_mph_ST_3lev.30.40. = 0,  speed_limit_mph_ST_3lev.40.50. = 1,
+                               bike_lane_SUM_ST1 = 1, bike_lane_SUM_ST2 = 0, 
+                               speed_prevail_minus_limit_ST = speed_prevail_levels[2],  
+                               street_parking_ST1 = 0, #arterials generally don't have street parking? 
+                               outside_lane_width_ft_ST = outside_lane_levels[2],
+                               bike_operating_space_ST = bike_space_levels[2], 
+                               veh_vol_non0_opspace_0_ST = 0) 
+    
+    arterial_bad = data.frame(veh_volume2_ST2 = 0, veh_volume2_ST3 = 1,
+                               speed_limit_mph_ST_3lev.30.40. = 0,  speed_limit_mph_ST_3lev.40.50. = 1,
+                               bike_lane_SUM_ST1 = 0, bike_lane_SUM_ST2 = 0, #local raods don't have bike lanes
+                               speed_prevail_minus_limit_ST = speed_prevail_levels[3],  
+                               street_parking_ST1 = 0, #arterials generally don't have street parking? 
+                               outside_lane_width_ft_ST = outside_lane_levels[3],
+                               bike_operating_space_ST = bike_space_levels[1], 
+                               veh_vol_non0_opspace_0_ST = 1) 
+    
+    
+    
+    
+    #   Counterfactuals ----
+    
+    #     - Create entry options (same for all models) ----
+    
+attitudes = data.frame(rbind(bad_attidudes, mid_attitudes, good_attidudes), 
+                        id = 1,  attitude = c("bad_attidude", "mid_attitude", "good_attidude"))
+levels(attitudes$attitude) = levels(attitudes$attitude)[c(2,3,1)]
+ability_comfort = data.frame(rbind(low_ability_comfort, mid_ability_comfort, high_ability_comfort), 
+                        id = 1,  ability_comfort = c("low_comfort", "mid_comfort", "high_comfort"))
+levels(ability_comfort$ability_comfort) = levels(ability_comfort$ability_comfort)[c(1,3,2)]
+road_environments = data.frame(rbind(local_road_bad, local_road_good,
+                                     collector_bad, collector_good,
+                                     arterial_bad, arterial_mid, arterial_good),
+                        id = 1,  road_environment = c("local_road_bad", "local_road_good",
+                                        "collector_bad", "collector_good",
+                                        "arterial_bad", "arterial_mid", "arterial_good"))
+person = data.frame(rbind(young_childless_male, midage_child_female, old_childless_female, old_childless_male),
+                        id = 1, person =  c("young_childless_male", "midage_child_female",
+                                          "old_childless_female", "old_childless_male"))
 
-# Null models
-# null_per = readRDS(file.path(path.to.models, "null_per.RDS"))
-# null_per_vid = readRDS(file.path(path.to.models, "null_per_vid.RDS"))
+all_counterfactuals = plyr::join_all(list(attitudes, ability_comfort, road_environments, person), by='id', type='full', )
+all_counterfactuals$rowID = 1:nrow(all_counterfactuals)
 
-# Main effects 
-# me_per = readRDS(file.path(path.to.models, "me_per.RDS"))
-# me_per_horse = readRDS(file.path(path.to.models, "me_per_horse.RDS"))
-# me_per_vid = readRDS(file.path(path.to.models, "me_per.RDS"))
-# me_per_vid_horse = readRDS(file.path(path.to.models, "me_perv.RDS"))
-# 
-# # Main effects + interaction effects
-# int_per = readRDS(file.path(path.to.models, "int_per.RDS"))
-# int_per_horse = readRDS(file.path(path.to.models, "int_per_horse.RDS"))
-# int_per_vid = readRDS(file.path(path.to.models, "int_per_vid.RDS"))
-# int_per_vid_horse = readRDS(file.path(path.to.models, "int_pe_vid_horse.RDS"))
+    #       + Add interactions ----
+interaction.terms = trimws(strsplit(as.character(models$int_per$formula[[1]][3][1]), " \\+ ")[[1]])
+interaction.terms = interaction.terms[grepl(interaction.terms, pattern = "\\.[A-za-z]{2}")]
 
-# Compare loo ----
+interactions = data.frame(do.call("cbind", lapply(interaction.terms, function(term) {
+  tmp = all_counterfactuals %>% select(names(all_counterfactuals)[sapply(names(all_counterfactuals), grepl, x = term)])
+  apply(tmp, 1, prod)
+})))
+names(interactions) = interaction.terms
 
-loo_compare("me_per.RDS" = models$me_per.RDS$loo, 
-            "me_per_vid.RDS" = models$me_per_vid.RDS$loo, 
-            "int_per.RDS" =models$int_per.RDS$loo, 
-            "int_per_vid.RDS" = models$int_per_vid.RDS$loo, 
-            null_per_loo2,
-            null_per_vid_loo2)
+all_counterfactuals = data.frame(all_counterfactuals, interactions)
 
-#         - Evaluate output ----
+    #   Get fitted values (model specific) ----
 
+# created fitted.names from example
+x = data.frame(c(bad_attidudes, high_ability_comfort, young_childless_male, collector_bad)) #note this doesn't have a person_ID
+predict(models$me_per, newdata = x, re_formula = NA) 
+fitted(models$me_per, newdata = x, re_formula = NA)
+fitted.names = as.vector(outer(colnames(fitted(models$me_per, newdata = x, re_formula = NA)),
+                               colnames(fitted(models$me_per, newdata = x, re_formula = NA)[,,]), 
+                               "paste"))
 
-null_per_vid.array = as.array(models$null_per_vid.RDS)
+#c("int_per_vid", "me_per_vid"),
 
-# [1] "int_per.RDS"      "int_per_vid.RDS"  "me_per.RDS"       "me_per_vid.RDS"   "null_per.RDS"     "null_per_vid.RDS"
+models_per.fitted = lapply(c("int_per", "me_per", "null_per"), function(model_name) {
+  
+  cat("calculating for ", model_name)
+  
+  all_counterfactuals.fitted = sapply(1:nrow(all_counterfactuals), function(x) {
+  fitted(models[[model_name]], newdata = all_counterfactuals[x,], re_formula = NA)
+  })
+  all_counterfactuals.fitted = data.frame(t(all_counterfactuals.fitted))
+  names(all_counterfactuals.fitted) = fitted.names
+  all_counterfactuals.fitted$rowID = 1:nrow(all_counterfactuals.fitted)
+  all_counterfactuals.fitted.melt = reshape2::melt(all_counterfactuals.fitted, id.vars = "rowID")
 
-# Quick summary
-summary(models$int_per.RDS)
-
-# Diagnostics
-check_hmc_diagnostics(models$null_per$fit)
-sapply(models, loo)
-
-# View coefficients
-
-# coefficients without video random effects
-mcmc_intervals(int_per_vid.array, pars = dimnames(model1.array)$parameters[!grepl(dimnames(model1.array)$parameters, pattern = "person_ID|lp__|r_")], prob_outer = .95) + 
-  geom_vline(aes(xintercept = 0))
-
-# only video random effects
-mcmc_intervals(int_per_vid.array, pars = dimnames(model1.array)$parameters[!grepl(dimnames(model1.array)$parameters, pattern = "person_ID|lp__|b_")], prob_outer = .95) + 
-  geom_vline(aes(xintercept = 0))
-
-# Look at videos with large random effects
-View(d %>% group_by(video_name) %>% 
-       summarize(first(URL), first(veh_volume2_ST),first(bike_lane_SUM_ST),
-                 first(bike_operating_space_ST), first(speed_limit_mph_ST), first(bike_speed_mph_ST)))
-
-# Compare two model coefficients
-
-model2.array = as.array(models$int_per_vid.RDS)
-
-# coefficients without video random effects
-plot_grid(
-mcmc_intervals(me_per.array, pars = dimnames(me_per.array)$parameters[!grepl(dimnames(me_per.array)$parameters, pattern = "person_ID|lp__|r_")], prob_outer = .95) + 
-  geom_vline(aes(xintercept = 0)),
-mcmc_intervals(int_per.array, pars = dimnames(int_per.array)$parameters[!grepl(dimnames(int_per.array)$parameters, pattern = "person_ID|lp__|r_|hs_c2")], prob_outer = .95) + 
-  geom_vline(aes(xintercept = 0)), 
-mcmc_intervals(me_per_vid.array, pars = dimnames(me_per_vid.array)$parameters[!grepl(dimnames(me_per_vid.array)$parameters, pattern = "person_ID|lp__|r_|hs_c2")], prob_outer = .95) + 
-  geom_vline(aes(xintercept = 0)),
-mcmc_intervals(int_per_vid.array, pars = dimnames(int_per_vid.array)$parameters[!grepl(dimnames(int_per_vid.array)$parameters, pattern = "person_ID|lp__|r_|hs_c2")], prob_outer = .95) + 
-  geom_vline(aes(xintercept = 0)), nrow = 2
-)
+  all_counterfactuals = full_join(all_counterfactuals, all_counterfactuals.fitted.melt, by = "rowID")
+  all_counterfactuals = all_counterfactuals %>% mutate(class = interaction(attitude, ability_comfort, road_environment))
+  all_counterfactuals$road_type =  sapply(as.character(all_counterfactuals$road_environment), "switch",
+                                        arterial_bad = "arterial",
+                                        arterial_mid = "arterial",
+                                        arterial_good = "arterial",
+                                        collector_bad = "collector",
+                                        collector_good = "collector",
+                                        local_road_bad = "local_road",
+                                        local_road_good = "local_road")      
+  return(all_counterfactuals)
+})
+names(models_per.fitted) = c("int_per", "me_per", "null_per")
 
 
-# just video random effects
-plot_grid(
-mcmc_intervals(me_per_vid.array, pars = dimnames(me_per_vid.array)$parameters[!grepl(dimnames(me_per_vid.array)$parameters, pattern = "person_ID|lp__|b_")], prob_outer = .95) + 
-  geom_vline(aes(xintercept = 0)),
-mcmc_intervals(int_per_vid.array, pars = dimnames(int_per_vid.array)$parameters[!grepl(dimnames(int_per_vid.array)$parameters, pattern = "person_ID|lp__|b_")], prob_outer = .95) + 
-  geom_vline(aes(xintercept = 0))
-)
+
+model_name = "me_per_vid"
+all_counterfactuals.fitted = sapply(1:nrow(all_counterfactuals), function(x) {
+  fitted(models[[model_name]], newdata = all_counterfactuals[x,], re_formula = NA)
+})
 
 
-#         + Predictions ----
+
+    #   Plot (model specific) ----
+
+sapply(1:length(models_per.fitted), function(i) {
+  
+  all_counterfactuals = models_per.fitted[[i]]
+  model_name = names(models_per.fitted)[i]
+  if (model_name != "null_per") {
+    
+  #   + plots by road type                        
+  counterfactuals_by_road = split(all_counterfactuals, all_counterfactuals$road_type)
+
+  #LocalRoads
+  ggplot( counterfactuals_by_road$local_road %>% filter(grepl("Estimate", variable))) +
+    geom_freqpoly(stat = "identity", aes(x = variable, y = value, group = person, color = person)) +
+    facet_wrap(~class, ncol = 6, strip.position = "top") +
+    theme_bw() +
+    ggtitle(paste("Local Roads, ", model_name)) +
+    theme(strip.text = element_text(size = 8),
+        axis.text.x = element_text(angle = 45, hjust = 1))
+  ggsave(file.path("/Users/jac/Box/Video_CTS/Report/IMG", model_name, "local_road_summary.png"),
+         width = 16, height = 12)
+
+  #Collector
+  ggplot( counterfactuals_by_road$collector %>% filter(grepl("Estimate", variable))) +
+    geom_freqpoly(stat = "identity", aes(x = variable, y = value, group = person, color = person)) +
+    facet_wrap(~class, ncol = 6, strip.position = "top") +
+    theme_bw() +
+    ggtitle(paste("Collectors, ", model_name)) +
+    theme(strip.text = element_text(size = 8),
+        axis.text.x = element_text(angle = 45, hjust = 1))
+  ggsave(file.path("/Users/jac/Box/Video_CTS/Report/IMG", model_name, "collector_summary.png"),
+         width = 16, height = 12)
+
+  #Arterial
+  ggplot( counterfactuals_by_road$arterial %>% filter(grepl("Estimate", variable))) +
+    geom_freqpoly(stat = "identity", aes(x = variable, y = value, group = person, color = person)) +
+    facet_wrap(~class, ncol = 9, strip.position = "left") +
+    theme_bw() +
+    ggtitle(paste("Arterial Streets, ", model_name)) +
+    theme(strip.text = element_text(size = 8),
+        axis.text.x = element_text(angle = 45, hjust = 1))
+  ggsave(file.path("/Users/jac/Box/Video_CTS/Report/IMG", model_name, "arterial_summary.png"),
+         width = 16, height = 12)
+
+  } else {
+    ggplot( all_counterfactuals %>%
+              filter(grepl("Estimate", variable), 
+              class == first(class), 
+              road_type == "local_road")) +
+      geom_freqpoly(stat = "identity", aes(x = variable, y = value, group = person, color = person),
+                    show.legend = FALSE) +
+      theme_bw() + 
+      ggtitle(paste("Null Model")) + 
+      theme(strip.text = element_text(size = 8),
+            axis.text.x = element_text(angle = 45, hjust = 1))
+    ggsave(file.path("/Users/jac/Box/Video_CTS/Report/IMG", model_name, "null.png"),
+           width = 16, height = 12)
+    
+  }
+  
+})
+
+# add CI's? (probably only visible if we seperate individuals? also most of the errors are pretty small)
+
+
+  #   Tables (model specific) ----
+
+all_counterfactuals.expected = lapply(models_per.fitted, function(x) {
+  x = filter(x, grepl("Estimate", variable)) %>% 
+  group_by(class, road_environment, person) %>% 
+  summarize(expected_value = mean(value*1:7))
+  return(x)
+})
+  
+tmp.table = left_join(all_counterfactuals.expected$int_per, 
+          all_counterfactuals.expected$me_per, 
+          by = c("class", "road_environment", "person"),
+          suffix = c(".int_per", ".me_per"))
+
+plot(tmp.table$expected_value.int_per, tmp.table$expected_value.me_per, 
+     col = tmp.table$road_environment)
+legend("topleft", levels(tmp.table$road_environment), col = 1:7, pch = 16)
+abline(a = 0, b =1, lty = 3)
+
+#   + plots -- all street types----
+# ggplot( all_counterfactuals %>% filter(grepl("Estimate", variable))) +
+#   geom_freqpoly(stat = "identity", aes(x = variable, y = value, group = person, color = person)) +
+#   facet_wrap(~class, nrow = 9) +
+#   theme_bw() + 
+#   theme(strip.text = element_text(size = 6))
+
+# Predictions ----
 
 # Single data point -- stochastic
 predict(model1, newdata = model1$data[1,]) 

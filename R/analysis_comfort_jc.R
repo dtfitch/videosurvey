@@ -30,10 +30,13 @@
 # 0. Setup ----
 library(brms)
 library(ggplot2)
+library(ggridges)
 library(bayesplot)
 library(rstan)
 library(dplyr)
 library(cowplot)
+library(glmnetcr)
+#also should have reshape2 and plyr installed
 
 path.to.models = "/Users/jac/Box/Video_CTS/Github/videosurvey/R/"
 setwd(path.to.models)
@@ -415,7 +418,7 @@ sapply(1:length(models_fitted), function(i) {
 # add CI's to plots? (probably only visible if we seperate individuals? also most of the errors are pretty small)
 
 
-    #   Tables (model specific) ----
+    #     - Tables (model specific) ----
 
 
 all_counterfactuals.expected = lapply(models_fitted, function(x) {
@@ -465,7 +468,7 @@ points(all_counterfactuals.expected$null_per_vid$expected_value[1],
 
 
 
-# Predictions ----
+# 3. Predictions ----
 
 # Single data point -- stochastic
 predict(model1, newdata = model1$data[1,]) 
@@ -476,10 +479,11 @@ model1.predict.ev =  model1.predict %*% c(1:7)
 # version of residuals
 hist(model1.predict.ev - as.numeric(model1$data$comfort_rating_ordered)) 
 
-#         + Random Effects ----
+# 4. Random Effects ----
 
 # Many large person-level random effects -- do we want a more restrictive prior?
-pi.samples = posterior_samples(model1, pars = "person_ID")
+# example with me_per
+pi.samples = posterior_samples(models$me_per, pars = "person_ID")
 pi.means = apply(pi.samples, 2, mean)
 hist(pi.means); summary(pi.means)
 hist(apply(pi.samples, 2, median), breaks = 20)
@@ -494,62 +498,9 @@ filter(d, person_ID %in% c("21", "2149", "1587", "2060", "44")) %>% select(comfo
 
 # Look at distributions of random effects when large
 length(which(abs(pi.means) > 3 ))
-pi.samples.melt = melt(data.frame(pi.samples[,which(abs(pi.means) > 3 )]))
+pi.samples.melt = reshape2::melt(data.frame(pi.samples[,which(abs(pi.means) > 3 )]))
 pi.samples.melt$variable = factor(pi.samples.melt$variable,
                                   levels = unique(pi.samples.melt$variable)[order(pi.means[which(abs(pi.means) > 3 )])])
 ggplot(data = pi.samples.melt) + 
-  geom_density_ridges(aes(x = value, group = variable, y = variable))
+  ggridges::geom_density_ridges(aes(x = value, group = variable, y = variable))
 
-#         + Compare predictions from ordinal model with and without random effects ----
-
-# Make data frame of response and model predictions (as expected values)
-ord.prelim.predict = data.frame(predict.ord = apply(predict(glmcr.prelim, type = "probs")$probs, 1:2, mean) %*%  c(1:7), 
-                                #predict.ord.mode = as.numeric(predict(glmcr.prelim, type = "class")),
-                                person_ID = d.remodel.int$person_ID,
-                                video_name = d.remodel.int$video_name)
-
-ord.predict.compare = left_join(ord.prelim.predict, data.frame(randord.brms.predict.ev,
-                                                               person_ID = randord.brms$data$person_ID, 
-                                                               # to fix
-                                                               video_name = d.remodel[apply(d.remodel, 1, function(x) {sum(is.na(x)) == 0}), "video_name"]), 
-                                by = c("person_ID", "video_name"))
-
-ord.predict.compare$response = as.numeric(ord.prelim$model$comfort_rating_ordered)
-ord.predict.compare = ord.predict.compare %>% arrange(response)
-plot(ord.predict.compare$predict.ord, ord.predict.compare$randord.brms.predict.ev)
-
-#         + Compare by plotting ----
-
-#           - in base ----
-par(mfrow = c(1,3))
-plot(ord.predict.compare$predict.ord.mode, col = "red", type = "p", ylim = c(1,7), 
-     main = "no random effects - modal response")
-points(ord.predict.compare$response, col = "black", type = "l")
-plot(ord.predict.compare$predict.ord, col = "red", type = "p", ylim = c(1,7), main = "no random effects - expected")
-points(ord.predict.compare$response, col = "black", type = "l")
-plot(ord.predict.compare$predict.brms, col = "green", type = "p",ylim = c(1,7), main = "random effects")
-points(ord.predict.compare$response, col = "black", type = "l")
-
-#residuals + noise
-plot(rnorm(nrow(ord.predict.compare),0,.5) + (ord.predict.compare$predict.brms - ord.predict.compare$response)[order(ord.predict.compare$predict.brms)], pch = ".")
-
-#           - in ggplot ----
-plot_grid(
-  ggplot(ord.predict.compare) + 
-    geom_hex(aes(x = 1:nrow(ord.predict.compare), y = predict.ord), bins = 10) +
-    geom_line(aes(x = 1:nrow(ord.predict.compare), y = response), color = "red", size = 4),
-  ggplot(ord.predict.compare) + 
-    geom_hex(aes(x = 1:nrow(ord.predict.compare), y = predict.brms), bins = 10) +
-    geom_line(aes(x = 1:nrow(ord.predict.compare), y = response), color = "red", size = 4)
-)
-ggsave("IMG/predictions_no_rand_vs_rand.png")
-
-#           - by histogram ----
-par(mfrow = c(1,1))
-hist(ord.predict.compare$predict.ord - ord.predict.compare$response, col = "gray", ylim = c(0,5000), breaks = 20,
-     main = "Comparison of residuals of model with (green) and without (gray) random effects")
-hist(ord.predict.compare$predict.brms - ord.predict.compare$response, add = T, col = "green", density = 30, breaks = 20)
-
-#           - by quantiles ----
-round(quantile(ord.predict.compare$predict.ord- ord.predict.compare$response, seq(0.05,.95,.05)),2)
-round(quantile(ord.predict.compare$predict.brms - ord.predict.compare$response, seq(0.05,.95,.05)),2)

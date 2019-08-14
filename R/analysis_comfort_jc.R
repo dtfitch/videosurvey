@@ -420,7 +420,6 @@ sapply(1:length(models_fitted), function(i) {
 
     #     - Tables (model specific) ----
 
-
 all_counterfactuals.expected = lapply(models_fitted, function(x) {
   y = filter(x, grepl("Estimate", variable)) %>% 
   droplevels() %>%
@@ -443,11 +442,13 @@ plot(x = model_fitted_per.table$expected_value.int_per,
      y = model_fitted_per.table$expected_value.me_per, 
      col = model_fitted_per.table$road_environment,
      xlab = "Interaction model", ylab = "Main effect model",
-     main = "Models without video random effects")
-legend("topleft", levels(model_fitted_per.table$road_environment), col = 1:7, pch = 16, bty = "n")
+     main = "ME vs. INT")
+legend("topleft", c(levels(model_fitted_per.table$road_environment), "null"), 
+       col = 1:8, pch = 16, bty = "n")
 abline(a = 0, b =1, lty = 3)
 points(all_counterfactuals.expected$null_per$expected_value[1], 
-       all_counterfactuals.expected$null_per$expected_value[1], pch  = "*", cex = 3)
+       all_counterfactuals.expected$null_per$expected_value[1], 
+       col = 8, pch = 16, cex = 2)
 
 # Models with video random effects
 
@@ -460,13 +461,15 @@ plot(x = model_fitted_per_vid.table$expected_value.int_per,
      y = model_fitted_per_vid.table$expected_value.me_per, 
      col = model_fitted_per.table$road_environment,
      xlab = "Interaction model", ylab = "Main effect model",
-     main = "Models with video random effects")
-legend("topleft", levels(model_fitted_per.table$road_environment), col = 1:7, pch = 16, bty = "n")
+     main = "ME vs. INT: With video random effects")
+legend("topleft", c(levels(model_fitted_per.table$road_environment), "null"),
+       col = 1:8, pch = 16, bty = "n")
 abline(a = 0, b =1, lty = 3)
 points(all_counterfactuals.expected$null_per_vid$expected_value[1], 
-       all_counterfactuals.expected$null_per_vid$expected_value[1], pch  = "*", cex = 3)
+       all_counterfactuals.expected$null_per_vid$expected_value[1], 
+       col = 8, pch = 16, cex = 2)
 
-
+#saved in Box/Video_CTS/Report/IMG as fitted_me_vs_int_draft.png
 
 # 3. Predictions ----
 

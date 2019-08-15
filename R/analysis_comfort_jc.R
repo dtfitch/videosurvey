@@ -25,6 +25,21 @@
 # pp_check, ppc_bars , e..g. pp_check(null2.loo, type = "bars", nsamples = "100")
 # brms tools forest for random effects
 # brmstools for coefficients?
+#
+# 8/14/19 - TO DO
+# 1) Reduce line plots to 20-yr old man, 57-year old woman (say both without u18 child)
+#  Add bands
+# 2) Clean up the right panel of the base plot and say that we use it to show how the random effect models differ when we don't use random effects to predict
+# = Discussion to show how the models differ, one model not end-all be-all
+# Show coefficient plot only for the main effect model
+# 3) Appendix tables -- drag image output from R markdown 
+#   make all one model comparison table w/ loo, estimate, sd, n and reff 
+# 4) Plots of conditional effects = ggridge plot of coefficients of me_per_vid
+# 5) mention .1,.5,.9 for person-level attributes, .05,.5,.9 
+# 6) BUFFERED bike lane, not protected
+# 7) table of street types
+# 8) Street parking is a control in our scenarios (always 1) since its effect is only mildly positive and (we think in reality) context dependent
+# 9) Figures max width 6.5, max height 9
 # ---------------------------------------------------------------------------------------------------------------
 
 # 0. Setup ----
@@ -36,7 +51,10 @@ library(rstan)
 library(dplyr)
 library(cowplot)
 library(glmnetcr)
-#also should have reshape2 and plyr installed
+library(forcats)
+library(stringr)
+library(reshape2)
+#also should have plyr and installed
 
 path.to.models = "/Users/jac/Box/Video_CTS/Github/videosurvey/R/"
 setwd(path.to.models)
@@ -92,12 +110,11 @@ null_loo_reduced_data = readRDS("null_loo_reduced_data.RDS")
     
     #   - Diagnostics ----
     check_hmc_diagnostics(models$null_per$fit)
-    sapply(models, loo)
     
     #   - View coefficients ad random effects ----
     
     # coefficients without video random effects
-    mcmc_intervals(int_per_vid.array, pars = dimnames(model1.array)$parameters[!grepl(dimnames(model1.array)$parameters, pattern = "person_ID|lp__|r_")], prob_outer = .95) + 
+    mcmc_intervals(int_per_vid.array, pars = dimnames(model1.array)$parameters[!grepl(dimnames(model1.array)$parameters, pattern = "person_ID|lp__|r_person|r_video")], prob_outer = .95) + 
       geom_vline(aes(xintercept = 0))
     
     # only video random effects
@@ -115,13 +132,13 @@ null_loo_reduced_data = readRDS("null_loo_reduced_data.RDS")
     
     # coefficients without video random effects
     plot_grid(
-    mcmc_intervals(me_per.array, pars = dimnames(me_per.array)$parameters[!grepl(dimnames(me_per.array)$parameters, pattern = "person_ID|lp__|r_")], prob_outer = .95) + 
+    mcmc_intervals(me_per.array, pars = dimnames(me_per.array)$parameters[!grepl(dimnames(me_per.array)$parameters, pattern = "person_ID|lp__|r_person|r_video")], prob_outer = .95) + 
       geom_vline(aes(xintercept = 0)),
-    mcmc_intervals(int_per.array, pars = dimnames(int_per.array)$parameters[!grepl(dimnames(int_per.array)$parameters, pattern = "person_ID|lp__|r_|hs_c2")], prob_outer = .95) + 
+    mcmc_intervals(int_per.array, pars = dimnames(int_per.array)$parameters[!grepl(dimnames(int_per.array)$parameters, pattern = "person_ID|lp__|r_person|r_video|hs_c2")], prob_outer = .95) + 
       geom_vline(aes(xintercept = 0)), 
-    mcmc_intervals(me_per_vid.array, pars = dimnames(me_per_vid.array)$parameters[!grepl(dimnames(me_per_vid.array)$parameters, pattern = "person_ID|lp__|r_|hs_c2")], prob_outer = .95) + 
+    mcmc_intervals(me_per_vid.array, pars = dimnames(me_per_vid.array)$parameters[!grepl(dimnames(me_per_vid.array)$parameters, pattern = "person_ID|lp__|r_person|r_video|hs_c2")], prob_outer = .95) + 
       geom_vline(aes(xintercept = 0)),
-    mcmc_intervals(int_per_vid.array, pars = dimnames(int_per_vid.array)$parameters[!grepl(dimnames(int_per_vid.array)$parameters, pattern = "person_ID|lp__|r_|hs_c2")], prob_outer = .95) + 
+    mcmc_intervals(int_per_vid.array, pars = dimnames(int_per_vid.array)$parameters[!grepl(dimnames(int_per_vid.array)$parameters, pattern = "person_ID|lp__|r_person|r_video|hs_c2")], prob_outer = .95) + 
       geom_vline(aes(xintercept = 0)), nrow = 2
     )
     
@@ -167,10 +184,9 @@ null_loo_reduced_data = readRDS("null_loo_reduced_data.RDS")
     
     #       + ability + comfort ----
     
-    table(d$usual_mode_4lev)
-    low_ability_comfort = data.frame(comfort_four_no_lane2=0, comfort_four_no_lane3=0, bike_ability=0, usual_mode_4levBike = 0)      
-    mid_ability_comfort = data.frame(comfort_four_no_lane2=1, comfort_four_no_lane3=0, bike_ability=.5, usual_mode_4levBike = 0) #<- should usual mode Bike be 1? About half in our survey ride bikes but much less in general population so I decided to stick with 0
-    high_ability_comfort = data.frame(comfort_four_no_lane2=0, comfort_four_no_lane3=1, bike_ability=1, usual_mode_4levBike = 1)    
+    low_ability_comfort = data.frame(comfort_four_no_lane2=0, comfort_four_no_lane3=0, bike_ability=.5, usual_mode_4levBike = 0) #somewhat confident, low comfort      
+    mid_ability_comfort = data.frame(comfort_four_no_lane2=1, comfort_four_no_lane3=0, bike_ability=.5, usual_mode_4levBike = 0) #somewaht confident, moderate comfort
+    high_ability_comfort = data.frame(comfort_four_no_lane2=0, comfort_four_no_lane3=1, bike_ability=1, usual_mode_4levBike = 1) #very confident, high comfort    
     
     #       + demographic ----
     range(d.person$age_impute)
@@ -186,56 +202,46 @@ null_loo_reduced_data = readRDS("null_loo_reduced_data.RDS")
     
     #     - Road environment ----
     
-    speed_prevail_levels = quantile(models$me_per$data$speed_prevail_minus_limit_ST, c(.1,.5,.9))
+    speed_prevail_levels = quantile(models$me_per$data$speed_prevail_minus_limit_ST, c(.05,.5,.95))
     speed_prevail_levels*(max(d.model$speed_prevail_minus_limit_ST) - min(d.model$speed_prevail_minus_limit_ST)) + min(d.model$speed_prevail_minus_limit_ST)
-    # 10% 50% 90% 
-    # -7   0   3 
+    # 5% 50% 95% 
+    # -10   0   5  
     
-    outside_lane_levels = quantile(models$me_per$data$outside_lane_width_ft_ST, c(.1,.5,.9))
+    outside_lane_levels = quantile(models$me_per$data$outside_lane_width_ft_ST, c(.05,.5,.95))
     outside_lane_levels*(max(d.model$outside_lane_width_ft_ST) - min(d.model$outside_lane_width_ft_ST)) + min(d.model$outside_lane_width_ft_ST)
-    #10% 50% 90% 
-    #10  11  13 
+    # 5% 50% 95% 
+    # 9  11  13 
     
-    bike_space_levels = quantile(models$me_per$data$bike_operating_space_ST, c(.1,.5,.9))
+    bike_space_levels = quantile(models$me_per$data$bike_operating_space_ST, c(.05,.5,.95))
     bike_space_levels*(max(d.model$bike_operating_space_ST) - min(d.model$bike_operating_space_ST)) + min(d.model$bike_operating_space_ST)
-    #10% 50% 90% 
-    #0   5  10 
+    # 5% 50% 95% 
+    # 0   5  11 
     
     
-    local_road_good = data.frame(veh_volume2_ST2 = 0, veh_volume2_ST3 = 0, 
-                                 speed_limit_mph_ST_3lev.30.40. = 0, speed_limit_mph_ST_3lev.40.50. = 0, 
-                                 bike_lane_SUM_ST1 = 0, bike_lane_SUM_ST2 = 0, #local raods don't have bike lanes
-                                 speed_prevail_minus_limit_ST = speed_prevail_levels[1],  
-                                 street_parking_ST1 = 1, #local roads generally have street parking? 
-                                 outside_lane_width_ft_ST = outside_lane_levels[2], 
-                                 bike_operating_space_ST = bike_space_levels[2], 
-                                 veh_vol_non0_opspace_0_ST = 0) 
-    
-    local_road_bad = data.frame(veh_volume2_ST2 = 0, veh_volume2_ST3 = 0, 
-                                speed_limit_mph_ST_3lev.30.40. = 0, speed_limit_mph_ST_3lev.40.50. = 0,
-                                bike_lane_SUM_ST1 = 0, bike_lane_SUM_ST2 = 0, #local raods don't have bike lanes
-                                speed_prevail_minus_limit_ST = speed_prevail_levels[3], # <- only difference with local road good?
-                                street_parking_ST1 = 1, #local roads generally have street parking? 
-                                outside_lane_width_ft_ST = outside_lane_levels[2], 
-                                bike_operating_space_ST = bike_space_levels[2], 
-                                veh_vol_non0_opspace_0_ST = 0) 
-    
-    
-    collector_good = data.frame(veh_volume2_ST2 = 1, veh_volume2_ST3 = 0,
-                                speed_limit_mph_ST_3lev.30.40. = 1,  speed_limit_mph_ST_3lev.40.50. = 0,
-                                bike_lane_SUM_ST1 = 1, bike_lane_SUM_ST2 = 0, 
+    collector_good = data.frame(veh_volume2_ST2 = 0, veh_volume2_ST3 = 0,
+                                speed_limit_mph_ST_3lev.30.40. = 0,  speed_limit_mph_ST_3lev.40.50. = 0,
+                                bike_lane_SUM_ST1 = 0, bike_lane_SUM_ST2 = 1, 
                                 speed_prevail_minus_limit_ST = speed_prevail_levels[1],  
-                                street_parking_ST1 = 1, #collectors generally have street parking? 
-                                outside_lane_width_ft_ST = outside_lane_levels[2],
+                                street_parking_ST1 = 1,
+                                outside_lane_width_ft_ST = outside_lane_levels[1],
                                 bike_operating_space_ST = bike_space_levels[3], 
                                 veh_vol_non0_opspace_0_ST = 0) 
     
-    collector_bad = data.frame(veh_volume2_ST2 = 1, veh_volume2_ST3 = 0,
+    collector_mid = data.frame(veh_volume2_ST2 = 1, veh_volume2_ST3 = 0,
+                               speed_limit_mph_ST_3lev.30.40. = 1,  speed_limit_mph_ST_3lev.40.50. = 0,
+                               bike_lane_SUM_ST1 = 1, bike_lane_SUM_ST2 = 0,
+                               speed_prevail_minus_limit_ST = speed_prevail_levels[2],  
+                               street_parking_ST1 = 1,
+                               outside_lane_width_ft_ST = outside_lane_levels[2],
+                               bike_operating_space_ST = bike_space_levels[2], 
+                               veh_vol_non0_opspace_0_ST = 0) 
+    
+    collector_bad = data.frame(veh_volume2_ST2 = 0, veh_volume2_ST3 = 1,
                                speed_limit_mph_ST_3lev.30.40. = 1,  speed_limit_mph_ST_3lev.40.50. = 0,
                                bike_lane_SUM_ST1 = 0, bike_lane_SUM_ST2 = 0,
                                speed_prevail_minus_limit_ST = speed_prevail_levels[3],  
-                               street_parking_ST1 = 1, #collectors generally have street parking? 
-                               outside_lane_width_ft_ST = outside_lane_levels[2],
+                               street_parking_ST1 = 1,
+                               outside_lane_width_ft_ST = outside_lane_levels[3],
                                bike_operating_space_ST = bike_space_levels[1], 
                                veh_vol_non0_opspace_0_ST = 1) 
     
@@ -244,7 +250,7 @@ null_loo_reduced_data = readRDS("null_loo_reduced_data.RDS")
                                 speed_limit_mph_ST_3lev.30.40. = 1,  speed_limit_mph_ST_3lev.40.50. = 0,
                                 bike_lane_SUM_ST1 = 0, bike_lane_SUM_ST2 = 1,
                                 speed_prevail_minus_limit_ST = speed_prevail_levels[1],  
-                                street_parking_ST1 = 0, #arterials generally don't have street parking? 
+                                street_parking_ST1 = 1, # all streets have street parking
                                 outside_lane_width_ft_ST = outside_lane_levels[1], #<- outside lane width effect is neg
                                 bike_operating_space_ST = bike_space_levels[3], 
                                 veh_vol_non0_opspace_0_ST = 0) 
@@ -253,16 +259,16 @@ null_loo_reduced_data = readRDS("null_loo_reduced_data.RDS")
                                speed_limit_mph_ST_3lev.30.40. = 0,  speed_limit_mph_ST_3lev.40.50. = 1,
                                bike_lane_SUM_ST1 = 1, bike_lane_SUM_ST2 = 0, 
                                speed_prevail_minus_limit_ST = speed_prevail_levels[2],  
-                               street_parking_ST1 = 0, #arterials generally don't have street parking? 
+                               street_parking_ST1 = 1, # all streets have street parking
                                outside_lane_width_ft_ST = outside_lane_levels[2],
                                bike_operating_space_ST = bike_space_levels[2], 
                                veh_vol_non0_opspace_0_ST = 0) 
     
     arterial_bad = data.frame(veh_volume2_ST2 = 0, veh_volume2_ST3 = 1,
                                speed_limit_mph_ST_3lev.30.40. = 0,  speed_limit_mph_ST_3lev.40.50. = 1,
-                               bike_lane_SUM_ST1 = 0, bike_lane_SUM_ST2 = 0, #local raods don't have bike lanes
+                               bike_lane_SUM_ST1 = 0, bike_lane_SUM_ST2 = 0, 
                                speed_prevail_minus_limit_ST = speed_prevail_levels[3],  
-                               street_parking_ST1 = 0, #arterials generally don't have street parking? 
+                               street_parking_ST1 = 1, # all streets have street parking
                                outside_lane_width_ft_ST = outside_lane_levels[3],
                                bike_operating_space_ST = bike_space_levels[1], 
                                veh_vol_non0_opspace_0_ST = 1) 
@@ -276,19 +282,24 @@ null_loo_reduced_data = readRDS("null_loo_reduced_data.RDS")
     
 attitudes = data.frame(rbind(bad_attidudes, mid_attitudes, good_attidudes), 
                         id = 1,  attitude = c("bad_attidude", "mid_attitude", "good_attidude"))
-levels(attitudes$attitude) = levels(attitudes$attitude)[c(2,3,1)]
+attitudes$attitude = ordered(attitudes$attitude, levels(attitudes$attitude)[c(1,3,2)])
+
 ability_comfort = data.frame(rbind(low_ability_comfort, mid_ability_comfort, high_ability_comfort), 
                         id = 1,  ability_comfort = c("low_comfort", "mid_comfort", "high_comfort"))
-levels(ability_comfort$ability_comfort) = levels(ability_comfort$ability_comfort)[c(1,3,2)]
-road_environments = data.frame(rbind(local_road_bad, local_road_good,
-                                     collector_bad, collector_good,
+ability_comfort$ability_comfort = ordered(ability_comfort$ability_comfort, levels(ability_comfort$ability_comfort)[c(2,3,1)])
+
+road_environments = data.frame(rbind(collector_bad, collector_mid, collector_good,
                                      arterial_bad, arterial_mid, arterial_good),
-                        id = 1,  road_environment = c("local_road_bad", "local_road_good",
-                                        "collector_bad", "collector_good",
+                        id = 1,  road_environment = c("collector_bad", "collector_mid", "collector_good",
                                         "arterial_bad", "arterial_mid", "arterial_good"))
-person = data.frame(rbind(young_childless_male, midage_child_female, old_childless_female, old_childless_male),
-                        id = 1, person =  c("young_childless_male", "midage_child_female",
-                                          "old_childless_female", "old_childless_male"))
+
+road_environments$road_environment = ordered(road_environments$road_environment,
+                levels = c("arterial_bad", "arterial_mid", "arterial_good", "collector_bad", "collector_mid", "collector_good"))
+
+person = data.frame(rbind(young_childless_male, #midage_child_female, old_childless_female,
+                          old_childless_male),
+                        id = 1, person =  c("20yr_man", #"midage_child_female", "old_childless_male", 
+                                          "57yr_woman"))
 
 all_counterfactuals = plyr::join_all(list(attitudes, ability_comfort, road_environments, person), by='id', type='full', )
 all_counterfactuals$rowID = 1:nrow(all_counterfactuals)
@@ -336,9 +347,8 @@ make_models_fitted = function(model_name) {
                                           arterial_mid = "arterial",
                                           arterial_good = "arterial",
                                           collector_bad = "collector",
-                                          collector_good = "collector",
-                                          local_road_bad = "local_road",
-                                          local_road_good = "local_road")      
+                                          collector_mid = "collector",
+                                          collector_good = "collector")    
   return(all_counterfactuals)
 }
 
@@ -354,40 +364,63 @@ models_fitted = c(models_per.fitted, models_per_vid.fitted)
 
     #     - Plot and save (model specific) ----
 
+first.nonNA = function(x) {first(na.omit(x))}
+
 sapply(1:length(models_fitted), function(i) {
   
-  all_counterfactuals = models_fitted[[i]]
+  tmp.all_counterfactuals = models_fitted[[i]]
   model_name = names(models_fitted)[i]
   if (!model_name %in%  c("null_per", "null_per_vid")) {
     
   #   + plots by road type                        
-  counterfactuals_by_road = split(all_counterfactuals, all_counterfactuals$road_type)
-
-  #LocalRoads
-  ggplot( counterfactuals_by_road$local_road %>% filter(grepl("Estimate", variable))) +
-    geom_freqpoly(stat = "identity", aes(x = variable, y = value, group = person, color = person)) +
-    facet_wrap(~class, ncol = 6, strip.position = "top") +
-    theme_bw() +
-    ggtitle(paste("Local Roads, ", model_name)) +
-    theme(strip.text = element_text(size = 8),
-        axis.text.x = element_text(angle = 45, hjust = 1))
-  ggsave(file.path("/Users/jac/Box/Video_CTS/Report/IMG", model_name, "local_road_summary.png"),
-         width = 16, height = 12)
+  counterfactuals_by_road = split(tmp.all_counterfactuals, tmp.all_counterfactuals$road_type)
 
   #Collector
-  ggplot( counterfactuals_by_road$collector %>% filter(grepl("Estimate", variable))) +
-    geom_freqpoly(stat = "identity", aes(x = variable, y = value, group = person, color = person)) +
-    facet_wrap(~class, ncol = 6, strip.position = "top") +
+  
+  # %>% group_by(class, person, variable) %>% summarize_all(first.nonNA)
+  
+  ggplot( counterfactuals_by_road$collector %>% 
+            filter(!grepl("Error", variable))  %>%
+            #have to reshape to seperate out lower, estimate, and upper since I didn't before
+            mutate( variable_type = fct_relabel(variable, str_extract, "[A-Za-z0-9\\.]*"),
+                    variable_level = fct_relabel(variable, str_extract, paste(levels(d$comfort_rating),collapse="|")),
+                    ) %>%
+            tidyr::spread(variable_type,value) %>%
+            group_by(class, person, variable_level) %>% summarize_all(first.nonNA)
+  ) +
+    geom_ribbon(stat = "identity", aes(x = as.factor(variable_level), ymin = Q2.5, ymax = Q97.5,
+                                         group = person, 
+                                         fill = person,
+                                         color = person), linetype = 3, alpha = .3) +
+    geom_line(aes(x = as.factor(variable_level), y = Estimate,
+                  group = person,
+                  color = person), linetype = 1) +
+    facet_wrap(~class, ncol = 9, strip.position = "top") +
     theme_bw() +
     ggtitle(paste("Collectors, ", model_name)) +
     theme(strip.text = element_text(size = 8),
         axis.text.x = element_text(angle = 45, hjust = 1))
+  
   ggsave(file.path("/Users/jac/Box/Video_CTS/Report/IMG", model_name, "collector_summary.png"),
          width = 16, height = 12)
 
   #Arterial
-  ggplot( counterfactuals_by_road$arterial %>% filter(grepl("Estimate", variable))) +
-    geom_freqpoly(stat = "identity", aes(x = variable, y = value, group = person, color = person)) +
+  ggplot( counterfactuals_by_road$arterial %>% 
+            filter(!grepl("Error", variable))  %>%
+            #have to reshape to seperate out lower, estimate, and upper since I didn't before
+            mutate( variable_type = fct_relabel(variable, str_extract, "[A-Za-z0-9\\.]*"),
+                    variable_level = fct_relabel(variable, str_extract, paste(levels(d$comfort_rating),collapse="|")),
+            ) %>%
+            tidyr::spread(variable_type,value) %>%
+            group_by(class, person, variable_level) %>% summarize_all(first.nonNA)
+  ) +
+    geom_ribbon(stat = "identity", aes(x = as.factor(variable_level), ymin = Q2.5, ymax = Q97.5,
+                                       group = person, 
+                                       fill = person,
+                                       color = person), linetype = 3, alpha = .3) +
+    geom_line(aes(x = as.factor(variable_level), y = Estimate,
+                  group = person,
+                  color = person), linetype = 1) +
     facet_wrap(~class, ncol = 9, strip.position = "left") +
     theme_bw() +
     ggtitle(paste("Arterial Streets, ", model_name)) +
@@ -397,16 +430,30 @@ sapply(1:length(models_fitted), function(i) {
          width = 20, height = 12)
 
   } else {
-    ggplot( all_counterfactuals %>%
-              filter(grepl("Estimate", variable), 
+    
+    ggplot( tmp.all_counterfactuals %>%
+              filter(!grepl("Error", variable), 
               class == first(class), 
-              road_type == "local_road")) +
-      geom_freqpoly(stat = "identity", aes(x = variable, y = value, group = person, color = person),
-                    show.legend = FALSE) +
+              road_type == "collector",
+              person == first(person)) %>%
+              mutate( variable_type = fct_relabel(variable, str_extract, "[A-Za-z0-9\\.]*"),
+                      variable_level = fct_relabel(variable, str_extract, paste(levels(d$comfort_rating),collapse="|"))) %>%
+              tidyr::spread(variable_type,value) %>%
+              group_by(class, person, variable_level) %>% summarize_all(first.nonNA)
+    ) +
+      geom_ribbon(stat = "identity", aes(x = as.factor(variable_level), ymin = Q2.5, ymax = Q97.5,
+                                         group = person, 
+                                         fill = person,
+                                         color = person), linetype = 3, alpha = .3, show.legend = F) +
+      geom_line(aes(x = as.factor(variable_level), y = Estimate,
+                    group = person,
+                    color = person),
+                    linetype = 1, show.legend = F) +
       theme_bw() + 
       ggtitle(paste("Null Model")) + 
       theme(strip.text = element_text(size = 8),
             axis.text.x = element_text(angle = 45, hjust = 1))
+    
     ggsave(file.path("/Users/jac/Box/Video_CTS/Report/IMG", model_name, "null.png"),
            width = 16, height = 12)
     
@@ -444,11 +491,11 @@ plot(x = model_fitted_per.table$expected_value.int_per,
      xlab = "Interaction model", ylab = "Main effect model",
      main = "ME vs. INT")
 legend("topleft", c(levels(model_fitted_per.table$road_environment), "null"), 
-       col = 1:8, pch = 16, bty = "n")
+       col = 1:7, pch = 16, bty = "n")
 abline(a = 0, b =1, lty = 3)
 points(all_counterfactuals.expected$null_per$expected_value[1], 
        all_counterfactuals.expected$null_per$expected_value[1], 
-       col = 8, pch = 16, cex = 2)
+       col = 7, pch = 16, cex = 2)
 
 # Models with video random effects
 
@@ -463,11 +510,11 @@ plot(x = model_fitted_per_vid.table$expected_value.int_per,
      xlab = "Interaction model", ylab = "Main effect model",
      main = "ME vs. INT: With video random effects")
 legend("topleft", c(levels(model_fitted_per.table$road_environment), "null"),
-       col = 1:8, pch = 16, bty = "n")
+       col = 1:7, pch = 16, bty = "n")
 abline(a = 0, b =1, lty = 3)
 points(all_counterfactuals.expected$null_per_vid$expected_value[1], 
        all_counterfactuals.expected$null_per_vid$expected_value[1], 
-       col = 8, pch = 16, cex = 2)
+       col = 7, pch = 16, cex = 2)
 
 #saved in Box/Video_CTS/Report/IMG as fitted_me_vs_int_draft.png
 

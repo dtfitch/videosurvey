@@ -377,8 +377,6 @@ sapply(1:length(models_fitted), function(i) {
 
   #Collector
   
-  # %>% group_by(class, person, variable) %>% summarize_all(first.nonNA)
-  
   ggplot( counterfactuals_by_road$collector %>% 
             filter(!grepl("Error", variable))  %>%
             #have to reshape to seperate out lower, estimate, and upper since I didn't before
@@ -460,10 +458,6 @@ sapply(1:length(models_fitted), function(i) {
   }
   
 })
-
-
-# add CI's to plots? (probably only visible if we seperate individuals? also most of the errors are pretty small)
-
 
     #     - Tables (model specific) ----
 

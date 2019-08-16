@@ -10,7 +10,7 @@
 #   What explains the tails in the ratings, i.e. people who deviate from the general trend?
 #   Do people have low-rating and high-rating tendencies, and are they explained by covariates?
 #----------------------------------------------------------------------------------------------
-# 0. Setup ----
+# 0. Setup ---- assumes we're in the R folder of the videosurvey repository (the one cloned in Box)
 
 library(ggplot2)
 library(ggridges)
@@ -18,10 +18,8 @@ library(dplyr)
 library(forcats)
 library(reshape2)
 
-setwd("~/Documents/videosurvey/")
-
 # Load data ---
-source("R/data_comfort.R")
+source("data_comfort.R") 
 
 #    plot themes ----
 
@@ -72,7 +70,7 @@ plot.usual.mode = ggplot(data = d) + theme1 +
   ggtitle("Usual Mode (N = 15283)") +
   xlab("")
 
-ggsave("IMG/survey_char.png", plot_grid(plot.gender, plot.age, 
+ggsave("../IMG/survey_char.png", plot_grid(plot.gender, plot.age, 
                                         plot.primary.role, plot.usual.mode, 
                                         align = "h"), width = 6, height = 6)
 
@@ -82,7 +80,7 @@ ggsave("IMG/survey_char.png", plot_grid(plot.gender, plot.age,
 
 #   Overall ratings distribution ----
 
-png("IMG/ratings_overall_hists.png", width = 800)
+png("../IMG/ratings_overall_hists.png", width = 800)
 par(mfrow = c(1,2))
 #mean
 hist(d.video$mean_comfort, breaks = 20, xlab = "mean rating", main = "Distribution of mean video ratings")
@@ -107,7 +105,7 @@ plot.med.ratings = ggplot(data = d.video) +  xlab(label = "") + theme2 +
   scale_x_discrete(drop=FALSE, labels = levels(d$comfort_rating)) + 
   ggtitle("Distribution of median comfort rating of streets")
 
-ggsave("IMG/overall_ratings.png", plot_grid(plot.ratings.discrete, plot.med.ratings, align = "h", nrow = 1), width = 12)
+ggsave("../IMG/overall_ratings.png", plot_grid(plot.ratings.discrete, plot.med.ratings, align = "h", nrow = 1), width = 12)
 
 
 
@@ -121,7 +119,7 @@ plot.ratings = ggplot(d.tmp, aes(x = comfort_rating, y = fct_reorder(video_name,
   xlab("") + ylab("") + 
   theme1
 
-ggsave("IMG/ratings_video_dists.png", plot.ratings, width = 4, height = 8)
+ggsave("../IMG/ratings_video_dists.png", plot.ratings, width = 4, height = 8)
 
 # Which videos have wide variation? (4th_AddisonUniversity, Tunnel_OakRidgeUplands, Ashby_ColbyRegent)
 d$video_name = relevel(d$video_name, ref = "4th_AddisonUniversity")
@@ -145,7 +143,7 @@ plot.ratings.female = ggplot(d.tmp %>% filter(!is.na(female)),
          legend.title =  element_text(family = "Times", size  = 16),
          legend.text = element_text(family = "Times", size  = 12),
          plot.margin = margin(1,0,0,0, "cm"))
-ggsave("IMG/ratings_video_gender_dists.png", plot.ratings.female, width = 6, height = 12)
+ggsave("../IMG/ratings_video_gender_dists.png", plot.ratings.female, width = 6, height = 12)
 
 #Video rating distribution by video and how comfortable someone is bicycling on a four lane road with no bike lane (3 levels)
 
@@ -171,9 +169,9 @@ plot.ratings.4lane = ggplot(d %>% group_by(video_name) %>%
          plot.margin = margin(1,0,0,0, "cm") #trbl
          )
 
-ggsave("IMG/ratings_video_4lane_dists.png", plot.ratings.4lane, width = 6, height = 12)
+ggsave("../IMG/ratings_video_4lane_dists.png", plot.ratings.4lane, width = 6, height = 12)
 
-ggsave("IMG/ratings_video_char_dists.png", plot_grid(plot.ratings.female, plot.ratings.4lane, align = "h"), width = 15, height = 20)
+ggsave("../IMG/ratings_video_char_dists.png", plot_grid(plot.ratings.female, plot.ratings.4lane, align = "h"), width = 15, height = 20)
 
 #Video rating distribution by video and "op_like_biking" (3 levels)
 plot.ratings.lkbike = ggplot(d %>% group_by(video_name) %>% 
@@ -190,7 +188,7 @@ plot.ratings.lkbike = ggplot(d %>% group_by(video_name) %>%
          axis.text.y = element_text(family = "Times", size  = 10),
          axis.title.y = element_text(family = "Times", size  = 10),
          title = element_text(family = "Times", size  = 10, face = "plain"))
-ggsave("IMG/ratings_video_lkbike_dists.png", plot.ratings.lkbike, width = 7, height = 10)
+ggsave("../IMG/ratings_video_lkbike_dists.png", plot.ratings.lkbike, width = 7, height = 10)
 
 #also tried: Video rating distribution by video and "usual_mode =="Bike " (3 levels)
 
@@ -207,7 +205,7 @@ plot.comfort = filter(d, num_lanes_ST == 4, bike_lane_ST==0) %>%
   theme(axis.text.x = element_text(angle = 0, hjust = .5),
         legend.position = "top")
   
-ggsave("IMG/plot_comfort.png", plot.comfort, width = 12)
+ggsave("../IMG/plot_comfort.png", plot.comfort, width = 12)
 
 
 # 3. Explore independent variables  ----
@@ -237,7 +235,7 @@ plot.allvar = ggplot(d.video.melt, aes(x = reorder(as.factor(value), sort(value)
   xlab("") +
   theme2
 
-ggsave("IMG/ratings_by_variable.png", plot.allvar, width = 12, height = 18)
+ggsave("../IMG/ratings_by_variable.png", plot.allvar, width = 12, height = 18)
 
 # Condensed ratings to negative, positive
 d.video.melt3 = d.video.melt %>% mutate(comfort_rating_3lev = as.factor(sapply(as.numeric(comfort_rating), condense_ratings, levels = 7))) %>%
@@ -253,7 +251,7 @@ plot.allvar.binary = ggplot(d.video.melt3 %>% group_by(variable), aes(x = reorde
   theme_bw() + xlab("") +
   theme2
 
-ggsave("IMG/ratings_binary_by_variable.png",  plot.allvar.binary, width = 12, height = 18)
+ggsave("../IMG/ratings_binary_by_variable.png",  plot.allvar.binary, width = 12, height = 18)
 
 
 #    Explore type of effects (additive vs. multiplicative) ----
@@ -305,7 +303,7 @@ plot.score = ggplot(d.scores %>% summarize(x = as.factor(first(value)), Score = 
   theme3 +
   ggtitle("Average Rating from Survey versus External Score of Streets")
 
-ggsave(filename = "IMG/ratings_vs_scores.png", plot.score, height = 5)
+ggsave(filename = "../IMG/ratings_vs_scores.png", plot.score, height = 5)
 
 # distributions with mean line ch
 ggplot(d.scores %>% mutate(m = mean(comfort_rating))) + 
@@ -329,5 +327,5 @@ plot.score.dists = ggplot(d.scores %>% mutate(m = mean(comfort_rating))) +
   theme3 +
   theme(axis.text.y = element_text(vjust = -.1))
 
-ggsave(filename = "IMG/ratings_vs_scores_joy.png", plot.score.dists, width = 6, height = 6)
+ggsave(filename = "../IMG/ratings_vs_scores_joy.png", plot.score.dists, width = 6, height = 6)
 

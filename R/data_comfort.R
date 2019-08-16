@@ -15,7 +15,9 @@
 #     - Broadway_GoldenGateLakeTemescal https://youtu.be/UR4BjyiPlY4 low --> none
 #     - Sloat35_CreastlakeGabilan https://youtu.be/Hek_CqLZk2A high --> low
 #     - SanPabloDam WildcattoOldSanPabloDam https://youtu.be/OpZ-zH7HD6o this one is borderline high but I left it bc 4 cars close together all in direction of bike, all pass bike
-# 0. Setup ----
+#
+#   
+# 0. Setup ---- assumes we're in the R folder of the videosurvey repository (the one cloned in Box)
 
 library(ggplot2)
 library(ggridges)
@@ -23,9 +25,6 @@ library(dplyr)
 library(forcats)
 library(reshape2)
 
-setwd("~/Documents/videosurvey/")
-
-  
 #   0b. Helper functions ----
 
 condense_ratings = function(x, levels) {
@@ -37,11 +36,11 @@ condense_ratings = function(x, levels) {
 
 # 1. Load Data ----
 
-d <- readRDS("video_survey_data_long.RDS") 
-d.block <-read.csv("VideoBlocks_LUT.csv", stringsAsFactors = F)
+d <- readRDS("../../../Data/video_survey_data_long.RDS") 
+d.block <-read.csv("../../../VideoBlocks_LUT.csv", stringsAsFactors = F)
 # Variables added to the data later (bike boulevard is for internal tracking, won't be used):
 d = left_join(d, d.block[,c("ID", "bike_operating_space", "bike_boulevard")], by = "ID") 
-d.meta <- read.csv("Metadata_video_survey_data_long.csv")
+d.meta <- read.csv("../../../Metadata_video_survey_data_long.csv")
 
 # 2. Some Variable Clean + Transformation
 #   Make street variables clear from names so easy to select ----

@@ -1,4 +1,5 @@
 # Models of bike comfort data
+# Main output of this scripte is "to_5i_jul_26.RData", which is loaded to run brms models
 # Jane Carlen, May 2019
 # -----------------------------------------------------------------------------------
 #
@@ -54,9 +55,8 @@ library(rpart)
 library(rpart.plot)
 
 #   Other ----
-setwd("~/Documents/videosurvey")
-source("R/data_comfort.R")
-source("R/eda_comfort.R")
+source("data_comfort.R")
+source("eda_comfort.R")
 
 summary(d)
 table(d$video_name)
@@ -587,7 +587,7 @@ top.names.int
 
 # ----------------------------------------------------------------------------------
 # 5. Mixed models with person random effects (BRMS) ---------------------------
-#       + Exploratory: Figure out how to account for between vs. within in the model ----
+#       -  Exploratory: Figure out how to account for between vs. within in the model ----
   
   #--- Note: blocks don't reprsent between or within selections (as I has thought), rather they represent types of videos ("loosely based on bike infrastructure, whether the road was a collector or arterial, and speed/traffic of cars")
   # so a video is always in the same block, but the person may see it as within (i.e. they only see it with other videos in the same block [in which case they have uniform block_ID]), or between (e.g  the only see it with other videos NOT within the same block[in which case they have no duplicated block_ID]). The block corresponds to broad road type, but the video_group is just an experimental variable. There should roughly be balance across blob and video_group. clear as mud?
@@ -626,7 +626,7 @@ d %>% group_by(video_name) %>%
             n = n()) %>% arrange(var)
 
 summary(lm(d.video$var ~ d.video$median_comfort))
-#       - build and scale (all on 0-1) model frames: ----
+#       5i. build and scale (all on 0-1) model frames: ----
 #          + Main effects set: Built after looking at random effects models and merging "inclusive" & "exclusive" sets: ----
 
 d.remodel.me = d.model %>%
@@ -768,6 +768,8 @@ d.remodel.int = d.remodel.int %>% mutate_if(is.numeric,
 # d.remodel.int2 = d.remodel.int2 %>% mutate_if(is.numeric, function(x) {(x-min(x, na.rm = T))/max(x - min(x, na.rm = T), na.rm = T)})
 
 # -------------------------------------------------------------------------------------
+# save.image("to_5i_jul_26.RData")
+# -------------------------------------------------------------------------------------
 #  RUN MODELS ON DYLAN'S DESKTOP  - SEE analysis_comfort.R for output of models and analysis of output ***----
 
 # do on dylan's desktop:
@@ -776,9 +778,9 @@ d.remodel.int = d.remodel.int %>% mutate_if(is.numeric,
 # }
 
 # (DEPRECATED scripts) 
-# # Inclusive coefficient set-- source("R/run_models_1.R")
-# # exclusive coefficient set: just top effects discovered before -- ource("R/run_models_2.R")
-# # exclusive coefficient set + interactions-source("R/run_models_3.R")
+# # Inclusive coefficient set-- source("run_models_1.R")
+# # exclusive coefficient set: just top effects discovered before -- ource("run_models_2.R")
+# # exclusive coefficient set + interactions-source("run_models_3.R")
 
 # -------------------------------------------------------------------------------------
 # ------------------------------ xx. Scratch -----------------------------------------

@@ -14,7 +14,11 @@
 #
 # ---------------------------------------------------------------------------------------------------------------
 
-# 0. Setup ----
+# 0. Setup ---- assumes we're in the R folder of the videosurvey repository (the one cloned in Box)
+
+#path.to.models = "/Users/jac/Box/Video_CTS/Github/videosurvey/R/"
+#setwd(path.to.models)
+
 library(brms)
 library(ggplot2)
 library(ggridges)
@@ -28,8 +32,6 @@ library(stringr)
 library(reshape2)
 #also should have plyr and installed
 
-path.to.models = "/Users/jac/Box/Video_CTS/Github/videosurvey/R/"
-setwd(path.to.models)
 load("to_5i_jul_26.RData")
 
 # - Model loads ----
@@ -276,7 +278,7 @@ person = data.frame(rbind(young_childless_male, #midage_child_female, old_childl
 all_counterfactuals = plyr::join_all(list(attitudes, ability_comfort, road_environments, person), by='id', type='full', )
 all_counterfactuals$rowID = 1:nrow(all_counterfactuals)
 
-saveRDS(list(attitudes, ability_comfort, road_environments), file = "../../../Report/RDS/counterfactual_building_blocks.RDS")
+saveRDS(list(attitudes, ability_comfort, road_environments), file = "counterfactual_building_blocks.RDS")
 
     #       + Add interactions ----
 interaction.terms = trimws(strsplit(as.character(models$int_per$formula[[1]][3][1]), " \\+ ")[[1]])
@@ -374,7 +376,7 @@ sapply(1:length(models_fitted), function(i) {
     theme(strip.text = element_text(size = 8),
         axis.text.x = element_text(angle = 45, hjust = 1))
   
-  ggsave(file.path("/Users/jac/Box/Video_CTS/Report/IMG", model_name, "collector_summary.png"),
+  ggsave(file.path("../IMG", model_name, "collector_summary.png"),
          width = 16, height = 12)
 
   #Arterial
@@ -399,7 +401,7 @@ sapply(1:length(models_fitted), function(i) {
     ggtitle(paste("Arterial Streets, ", model_name)) +
     theme(strip.text = element_text(size = 8),
         axis.text.x = element_text(angle = 45, hjust = 1))
-  ggsave(file.path("/Users/jac/Box/Video_CTS/Report/IMG", model_name, "arterial_summary.png"),
+  ggsave(file.path("../IMG", model_name, "arterial_summary.png"),
          width = 20, height = 12)
 
   } else {
@@ -427,7 +429,7 @@ sapply(1:length(models_fitted), function(i) {
       theme(strip.text = element_text(size = 8),
             axis.text.x = element_text(angle = 45, hjust = 1))
     
-    ggsave(file.path("/Users/jac/Box/Video_CTS/Report/IMG", model_name, "null.png"),
+    ggsave(file.path("../IMG", model_name, "null.png"),
            width = 16, height = 12)
     
   }
@@ -485,7 +487,7 @@ points(all_counterfactuals.expected$null_per_vid$expected_value[1],
        all_counterfactuals.expected$null_per_vid$expected_value[1], 
        col = 7, pch = 16, cex = 2)
 
-#saved in Box/Video_CTS/Report/IMG as fitted_me_vs_int_draft.png
+#saved in IMG as fitted_me_vs_int_draft.png
 
 # 3. Predictions ----
 

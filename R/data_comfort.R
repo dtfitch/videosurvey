@@ -37,10 +37,10 @@ condense_ratings = function(x, levels) {
 # 1. Load Data ----
 
 d <- readRDS("../../../Data/video_survey_data_long.RDS") 
-d.block <-read.csv("../../../VideoBlocks_LUT.csv", stringsAsFactors = F)
+d.block <-read.csv("../../../Data/VideoBlocks_LUT.csv", stringsAsFactors = F)
 # Variables added to the data later (bike boulevard is for internal tracking, won't be used):
 d = left_join(d, d.block[,c("ID", "bike_operating_space", "bike_boulevard")], by = "ID") 
-d.meta <- read.csv("../../../Metadata_video_survey_data_long.csv")
+d.meta <- read.csv("../../../Data/Metadata_video_survey_data_long.csv")
 
 # 2. Some Variable Clean + Transformation
 #   Make street variables clear from names so easy to select ----

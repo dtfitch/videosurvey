@@ -60,7 +60,8 @@ plot.primary.role = ggplot(data = d) + theme1 +
   geom_bar(aes(x = as.factor(primary_role))) +
   scale_x_discrete(labels = c("Faculty", "Grad. Student", "Staff", "Undergraduate", #undergrad incl. Post-Bac)
                               "Visiting Scholar")) +
-  ggtitle("Primary Role (N = 15288)")
+  ggtitle("Primary Role (N = 15288)") +
+  xlab("")
 
 plot.age = ggplot(data = d) + theme1 + geom_bar(aes(x = age)) +
   ggtitle("Age (N = 14777)")
@@ -68,7 +69,8 @@ plot.age = ggplot(data = d) + theme1 + geom_bar(aes(x = age)) +
 plot.usual.mode = ggplot(data = d) + theme1 + 
   geom_bar(aes(x = as.numeric(usual_mode_4lev))) +
   scale_x_continuous(breaks = 1:4, labels = levels(d$usual_mode_4lev)) +
-  ggtitle("Usual Mode (N = 15283)")
+  ggtitle("Usual Mode (N = 15283)") +
+  xlab("")
 
 ggsave("IMG/survey_char.png", plot_grid(plot.gender, plot.age, 
                                         plot.primary.role, plot.usual.mode, 

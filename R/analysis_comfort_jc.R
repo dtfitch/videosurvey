@@ -3,43 +3,15 @@
 # Notes:
 # Didn't analyze models with horshoe prior
 # Have main and int, with and without video re, two nulls <- 6 total models
-#
+# (policy would say) ~5 ft for bike lane, ~7ft for protected bike land, bufferred?
 #
 # TO DO: 
-# run scenarios on sheets - try for me and int (since we have it) but we'll probably only display me model.
 #
-# ~5 ft for bike lane, ~7ft for protected bike land
-#individual cases:
-# means for attitudes
-#
-# veh_vol_non0_opspace_0_ST
-# bike_operating_space_ST  
-# street_parking_ST1
-# bike_lane_SUM_ST1 
-# bike_lane_SUM_ST2  
-# veh_volume2_ST3
-# bike_lane_SUM_ST2                   
-# speed_limit_mph_ST_3lev.40.50.
-# speed_limit_mph_ST_3lev.30.40.  
-#
+# See jane activites
 # pp_check, ppc_bars , e..g. pp_check(null2.loo, type = "bars", nsamples = "100")
 # brms tools forest for random effects
 # brmstools for coefficients?
 #
-# 8/14/19 - TO DO
-# 1) Reduce line plots to 20-yr old man, 57-year old woman (say both without u18 child)
-#  Add bands
-# 2) Clean up the right panel of the base plot and say that we use it to show how the random effect models differ when we don't use random effects to predict
-# = Discussion to show how the models differ, one model not end-all be-all
-# Show coefficient plot only for the main effect model
-# 3) Appendix tables -- drag image output from R markdown 
-#   make all one model comparison table w/ loo, estimate, sd, n and reff 
-# 4) Plots of conditional effects = ggridge plot of coefficients of me_per_vid
-# 5) mention .1,.5,.9 for person-level attributes, .05,.5,.9 
-# 6) BUFFERED bike lane, not protected
-# 7) table of street types
-# 8) Street parking is a control in our scenarios (always 1) since its effect is only mildly positive and (we think in reality) context dependent
-# 9) Figures max width 6.5, max height 9
 # ---------------------------------------------------------------------------------------------------------------
 
 # 0. Setup ----
@@ -276,7 +248,7 @@ null_loo_reduced_data = readRDS("null_loo_reduced_data.RDS")
     
     
     
-    #   Counterfactuals ----
+    #   Counterfactuals (makes "all_counterfactuals") ----
     
     #     - Create entry options (same for all models) ----
     
@@ -303,6 +275,8 @@ person = data.frame(rbind(young_childless_male, #midage_child_female, old_childl
 
 all_counterfactuals = plyr::join_all(list(attitudes, ability_comfort, road_environments, person), by='id', type='full', )
 all_counterfactuals$rowID = 1:nrow(all_counterfactuals)
+
+saveRDS(list(attitudes, ability_comfort, road_environments), file = "../../../Report/RDS/counterfactual_building_blocks.RDS")
 
     #       + Add interactions ----
 interaction.terms = trimws(strsplit(as.character(models$int_per$formula[[1]][3][1]), " \\+ ")[[1]])
@@ -333,8 +307,9 @@ make_models_fitted = function(model_name) {
   cat("calculating for ", model_name)
   
   all_counterfactuals.fitted = sapply(1:nrow(all_counterfactuals), function(x) {
-    fitted(models[[model_name]], newdata = all_counterfactuals[x,], re_formula = NA)
+      fitted(models[[model_name]], newdata = all_counterfactuals[x,], re_formula = NA)
   })
+  
   all_counterfactuals.fitted = data.frame(t(all_counterfactuals.fitted))
   names(all_counterfactuals.fitted) = fitted.names
   all_counterfactuals.fitted$rowID = 1:nrow(all_counterfactuals.fitted)

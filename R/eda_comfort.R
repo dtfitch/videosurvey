@@ -10,7 +10,7 @@
 #   What explains the tails in the ratings, i.e. people who deviate from the general trend?
 #   Do people have low-rating and high-rating tendencies, and are they explained by covariates?
 #----------------------------------------------------------------------------------------------
-# 0. Setup ---- assumes we're in the R folder of the videosurvey repository (the one cloned in Box)
+# 0. Setup ---- assumes we're in the R folder of the videosurvey repository (the one cloned in Box) ----
 
 library(ggplot2)
 library(ggridges)

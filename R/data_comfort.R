@@ -17,7 +17,7 @@
 #     - SanPabloDam WildcattoOldSanPabloDam https://youtu.be/OpZ-zH7HD6o this one is borderline high but I left it bc 4 cars close together all in direction of bike, all pass bike
 #
 #   
-# 0. Setup ---- assumes we're in the R folder of the videosurvey repository (the one cloned in Box)
+# 0. Setup ---- assumes we're in the R folder of the videosurvey repository (the one cloned in Box) ----
 
 library(ggplot2)
 library(ggridges)

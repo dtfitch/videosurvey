@@ -29,7 +29,11 @@ These files are listed in the order they would likely be used
   - model_loo.R - Code to add loo (leave-one-out cross validation metric) to fit models
   - analysis_comfort_jc.R	 - Code for model evaluation and prediction from models.
 
+## data
 
+  - counterfactual_building_blocks.RDS - hypothetical street/demographic/attitude scenarios
+  - variable_name_dictionary.RDS - mapping (as a named vector) of model parameter names to readable names 
+  
 - Modeling notes 
   - Preliminary ordered model (ord.prelim) and penalized ordered model (glmcr.prelim) have reasonable coefficient estimates.
   - Street features basically provide as much information as street id. (This may be because the features essentially reconstruct the names, though the signs of the coefficients make sense so probably not.) 

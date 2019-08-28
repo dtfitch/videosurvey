@@ -1,7 +1,6 @@
 # Load and analyse output of models created in model_comfort_jc.R -----
 # 
 # Notes:
-# Didn't analyze models with horshoe prior
 # Have main and int, with and without video re, two nulls <- 6 total models
 # (policy would say) ~5 ft for bike lane, ~7ft for protected bike land, bufferred?
 #
@@ -14,10 +13,9 @@
 #
 # ---------------------------------------------------------------------------------------------------------------
 
-# 0. Setup ---- assumes we're in the R folder of the videosurvey repository (the one cloned in Box)
-
-#path.to.models = "/Users/jac/Box/Video_CTS/Github/videosurvey/R/"
-#setwd(path.to.models)
+# 0. Setup ---- 
+path.to.models = "/Users/jac/Box/Video_CTS/Github/videosurvey/R/"
+setwd(path.to.models)
 
 library(brms)
 library(ggplot2)
@@ -34,6 +32,7 @@ library(reshape2)
 
 load("to_5i_jul_26.RData")
 
+
 # - Model loads ----
 
 models = readRDS("models_with_loo.RDS")
@@ -49,25 +48,60 @@ null_per_vid.array = as.array(models$null_per_vid)
 
 null_loo_reduced_data = readRDS("null_loo_reduced_data.RDS")
 
-#   (DEPRECATED) individual model loads  ----
-    
-    # Null models
-    # null_per = readRDS(file.path(path.to.models, "null_per.RDS"))
-    # null_per_vid = readRDS(file.path(path.to.models, "null_per_vid.RDS"))
-    
-    # Main effects 
-    # me_per = readRDS(file.path(path.to.models, "me_per.RDS"))
-    # me_per_horse = readRDS(file.path(path.to.models, "me_per_horse.RDS"))
-    # me_per_vid = readRDS(file.path(path.to.models, "me_per.RDS"))
-    # me_per_vid_horse = readRDS(file.path(path.to.models, "me_perv.RDS"))
-    # 
-    # # Main effects + interaction effects
-    # int_per = readRDS(file.path(path.to.models, "int_per.RDS"))
-    # int_per_horse = readRDS(file.path(path.to.models, "int_per_horse.RDS"))
-    # int_per_vid = readRDS(file.path(path.to.models, "int_per_vid.RDS"))
-    # int_per_vid_horse = readRDS(file.path(path.to.models, "int_pe_vid_horse.RDS"))
-    
-    
+
+# - Make variable name dictionary ----
+
+varname_dict = names(models[["me_per_vid"]]$data)
+names(varname_dict) = varname_dict
+
+tmp.rename.func <- function(varname_dict, var, newname) {
+  x = which(varname_dict == var)
+  if (length(x) > 0) {varname_dict[x] =  newname}
+  varname_dict
+}
+
+varname_dict = tmp.rename.func(varname_dict, "comfort_rating_ordered", "comfort rating")
+
+varname_dict = tmp.rename.func(varname_dict, "female1", "IND female")
+varname_dict = tmp.rename.func(varname_dict, "child_u18TRUE", "IND household has child under 18")
+varname_dict = tmp.rename.func(varname_dict, "age_impute", "IND age, imputed")
+varname_dict = tmp.rename.func(varname_dict, "primary_role", "IND primary role")
+
+varname_dict = tmp.rename.func(varname_dict, "op_like_biking", "IND like riding a bike")
+varname_dict = tmp.rename.func(varname_dict, "op_need_car", "IND need car for activities")
+varname_dict = tmp.rename.func(varname_dict, "op_feel_safe", "IND feel safe biking on campus")
+varname_dict = tmp.rename.func(varname_dict, "op_like_transit", "IND like using public transit")
+varname_dict = tmp.rename.func(varname_dict, "op_arrive_professional", "IND job needs professional attire")
+varname_dict = tmp.rename.func(varname_dict, "op_travel_stress", "IND travelling to campus is stressful")
+varname_dict = tmp.rename.func(varname_dict, "bike_ability", "IND confidence level riding a bike")
+varname_dict = tmp.rename.func(varname_dict, "comfort_four_no_lane2", "IND willing to bike on 4-lane road")
+varname_dict = tmp.rename.func(varname_dict, "comfort_four_no_lane3", "IND comfortable biking on 4-lane road")
+varname_dict = tmp.rename.func(varname_dict, "usual_mode_4levBike", "IND usually commute to campus by bike")
+
+varname_dict = tmp.rename.func(varname_dict, "street_parking_ST1", "ST street parking")
+varname_dict = tmp.rename.func(varname_dict, "outside_lane_width_ft_ST", "ST outside lane width")
+varname_dict = tmp.rename.func(varname_dict, "veh_volume2_ST2", "ST low volume")
+varname_dict = tmp.rename.func(varname_dict, "veh_volume2_ST3", "ST high volume")
+varname_dict = tmp.rename.func(varname_dict, "bike_operating_space_ST", "ST bike operating space")
+varname_dict = tmp.rename.func(varname_dict, "bike_lane_SUM_ST1", "ST bike lane, no buffer")
+varname_dict = tmp.rename.func(varname_dict, "bike_lane_SUM_ST2", "ST bike lane, with buffer")
+varname_dict = tmp.rename.func(varname_dict, "speed_prevail_minus_limit_ST", "ST prevailing minus posted speed")
+varname_dict = tmp.rename.func(varname_dict, "speed_limit_mph_ST_3lev.30.40.", "ST speed limit [30,40)")
+varname_dict = tmp.rename.func(varname_dict, "speed_limit_mph_ST_3lev.40.50.", "ST speed limit [40,50]")
+varname_dict = tmp.rename.func(varname_dict, "veh_vol_non0_opspace_0_ST", "ST bikes share space with cars")
+
+varname_dict = tmp.rename.func(varname_dict, "person_ID", "person ID")
+varname_dict = tmp.rename.func(varname_dict, "video_name", "video name")
+
+#more we'll need below
+varname_dict2 = setNames(nm = c("ability_comfort", "road_environment", "id", "attitude"),
+                         c("biking comfort", "road environment", "id", "transit attitudes"))
+
+varname_dict = c(varname_dict, varname_dict2)
+rm(varname_dict2)
+
+saveRDS(varname_dict, file = "variable_name_dictionary.RDS")
+
 # 1. Model diagnostics and summary ----
     # 
     #   - Compare loo ----
@@ -78,27 +112,72 @@ null_loo_reduced_data = readRDS("null_loo_reduced_data.RDS")
                 "int_per_vid" = models$int_per_vid$loo, 
                 null_loo_reduced_data$null_per_loo2,
                 null_loo_reduced_data$null_per_vid_loo2)
-    
+
+# elpd_diff se_diff
+# me_per_vid                      0.0       0.0
+# int_per_vid                    -0.2       1.9
+# readRDS("null_per_vid.RDS")  -126.1      17.3
+# int_per                      -236.8      22.3
+# me_per                       -493.4      31.4
+# readRDS("null_per.RDS")     -2933.4      72.8
+
     #   - Quick summary ----
     summary(models$int_per)
     
     #   - Diagnostics ----
-    check_hmc_diagnostics(models$null_per$fit)
+    sapply(models, function(x) {check_hmc_diagnostics(x$fit)}) #all look good
     
-    #   - View coefficients ad random effects ----
+# 2. Model coefficients and random effects ----
     
-    # coefficients without video random effects
-    mcmc_intervals(int_per_vid.array, pars = dimnames(model1.array)$parameters[!grepl(dimnames(model1.array)$parameters, pattern = "person_ID|lp__|r_person|r_video")], prob_outer = .95) + 
+    # coefficients ----
+
+    #intervals
+    mcmc_intervals(me_per_vid.array, 
+                   pars = dimnames(me_per_vid.array)$parameters[!grepl(dimnames(me_per_vid.array)$parameters,
+                   pattern = "person_ID|lp__|r_person|r_video")], prob = .5, prob_outer = .95) + 
       geom_vline(aes(xintercept = 0))
+
+    #density
+    # I made a custom version of mcmc_ares_ridges in the mcmc_areas_ridges2.R file
+    # It uses a size argument to control the thickness of the lines in the density pltos
+  source("mcmc_areas_ridges2.R")
+
+
+  mcmc_areas_ridges2(me_per_vid.array, 
+                      pars = (dimnames(me_per_vid.array)$parameters[!grepl(dimnames(me_per_vid.array)$parameters,
+                      pattern = "person_ID|lp__|r_person|r_video")]), prob = .99, prob_outer = .99,
+                     size = .1, names = varname_dict) + 
+      geom_vline(aes(xintercept = 0))  + theme_bw() 
     
-    # only video random effects
-    mcmc_intervals(int_per_vid.array, pars = dimnames(model1.array)$parameters[!grepl(dimnames(model1.array)$parameters, pattern = "person_ID|lp__|b_")], prob_outer = .95) + 
-      geom_vline(aes(xintercept = 0))
+    ggsave(filename = "../IMG/me_per_vid_ridges.png", width = 6.5, height = 5)
     
-    # Look at videos with large random effects
-    View(d %>% group_by(video_name) %>% 
-           summarize(first(URL), first(veh_volume2_ST),first(bike_lane_SUM_ST),
-                     first(bike_operating_space_ST), first(speed_limit_mph_ST), first(bike_speed_mph_ST)))
+    
+    mcmc_areas_ridges2(int_per_vid.array, 
+                      pars = dimnames(int_per_vid.array)$parameters[!grepl(dimnames(int_per_vid.array)$parameters, 
+                      pattern = "person_ID|lp__|r_person|r_video")], prob = .99, prob_outer = .99,
+                      size = .1, names = varname_dict) + 
+      geom_vline(aes(xintercept = 0)) + theme_bw()
+    
+    ggsave(filename = "../IMG/int_per_vid_ridges.png", width = 6.5, height = 5)
+    
+    
+    mcmc_areas_ridges2(me_per.array, 
+                      pars = dimnames(me_per.array)$parameters[!grepl(dimnames(me_per.array)$parameters, 
+                       pattern = "person_ID|lp__|r_person|r_video")], prob = .99, prob_outer = .99,
+                      size = .1, names = varname_dict) + 
+      geom_vline(aes(xintercept = 0)) + theme_bw()
+    
+    ggsave(filename = "../IMG/me_per_ridges.png", width = 6.5, height = 5)
+    
+    
+    mcmc_areas_ridges2(int_per.array, 
+                      pars = dimnames(int_per.array)$parameters[!grepl(dimnames(int_per.array)$parameters, 
+                       pattern = "person_ID|lp__|r_person|r_video")], prob = .99, prob_outer = .99,
+                      size = .1, names = varname_dict) + 
+      geom_vline(aes(xintercept = 0)) + theme_bw()
+  
+    ggsave(filename = "../IMG/int_per_ridges.png", width = 6.5, height = 5)
+    
     
     # Compare two model coefficients
     
@@ -116,6 +195,8 @@ null_loo_reduced_data = readRDS("null_loo_reduced_data.RDS")
       geom_vline(aes(xintercept = 0)), nrow = 2
     )
     
+    # random effects ----
+    
     
     # just video random effects
     plot_grid(
@@ -124,10 +205,42 @@ null_loo_reduced_data = readRDS("null_loo_reduced_data.RDS")
     mcmc_intervals(int_per_vid.array, pars = dimnames(int_per_vid.array)$parameters[!grepl(dimnames(int_per_vid.array)$parameters, pattern = "person_ID|lp__|b_")], prob_outer = .95) + 
       geom_vline(aes(xintercept = 0))
     )
+
+    
+    # Look at videos with large random effects
+    View(d %>% group_by(video_name) %>% 
+           summarize(first(URL), first(veh_volume2_ST),first(bike_lane_SUM_ST),
+                     first(bike_operating_space_ST), first(speed_limit_mph_ST), first(bike_speed_mph_ST)))
+    
+    
+    # Many large person-level random effects -- do we want a more restrictive prior?
+    # example with me_per
+    pi.samples = posterior_samples(models$me_per, pars = "person_ID")
+    pi.means = apply(pi.samples, 2, mean)
+    hist(pi.means); summary(pi.means)
+    hist(apply(pi.samples, 2, median), breaks = 20)
+    summary(apply(pi.samples, 2, median))
+    
+    
+    # Look at inidividaul large person random effects
+    # Especially for people who always feel uncomfortable despite a large bike lane
+    which(pi.means < -5 )
+    filter(d, person_ID %in% c("21", "2149", "1587", "2060", "44")) %>% select(comfort_rating, NCHRP_BLOS_ST, bike_lane_SUM_ST, comfort_four_no_lane, video_name, VideoGroup, person_ID) %>%
+      arrange(person_ID)
+    #weird that they all have the same videos?
+    
+    
+    # Look at distributions of random effects when large
+    length(which(abs(pi.means) > 3 ))
+    pi.samples.melt = reshape2::melt(data.frame(pi.samples[,which(abs(pi.means) > 3 )]))
+    pi.samples.melt$variable = factor(pi.samples.melt$variable,
+                                      levels = unique(pi.samples.melt$variable)[order(pi.means[which(abs(pi.means) > 3 )])])
+    ggplot(data = pi.samples.melt) + 
+      ggridges::geom_density_ridges(aes(x = value, group = variable, y = variable))
     
     
     
-# 2. Scenarios to understand coefficients ----
+# 3. Scenarios to understand coefficients ----
     
     # summary 
     
@@ -278,7 +391,11 @@ person = data.frame(rbind(young_childless_male, #midage_child_female, old_childl
 all_counterfactuals = plyr::join_all(list(attitudes, ability_comfort, road_environments, person), by='id', type='full', )
 all_counterfactuals$rowID = 1:nrow(all_counterfactuals)
 
-saveRDS(list(attitudes, ability_comfort, road_environments), file = "counterfactual_building_blocks.RDS")
+building_blocks = list(attitudes = attitudes, ability_comfort = ability_comfort, road_environments = road_environments)
+
+sapply(building_blocks, function(x) {names(x) = varname_dict[names(x)]; x})
+
+saveRDS(building_blocks, file = "counterfactual_building_blocks.RDS")
 
     #       + Add interactions ----
 interaction.terms = trimws(strsplit(as.character(models$int_per$formula[[1]][3][1]), " \\+ ")[[1]])
@@ -489,7 +606,7 @@ points(all_counterfactuals.expected$null_per_vid$expected_value[1],
 
 #saved in IMG as fitted_me_vs_int_draft.png
 
-# 3. Predictions ----
+# 4. Predictions ----
 
 # Single data point -- stochastic
 predict(model1, newdata = model1$data[1,]) 
@@ -500,28 +617,28 @@ model1.predict.ev =  model1.predict %*% c(1:7)
 # version of residuals
 hist(model1.predict.ev - as.numeric(model1$data$comfort_rating_ordered)) 
 
-# 4. Random Effects ----
+# 5. Model comparison table
 
-# Many large person-level random effects -- do we want a more restrictive prior?
-# example with me_per
-pi.samples = posterior_samples(models$me_per, pars = "person_ID")
-pi.means = apply(pi.samples, 2, mean)
-hist(pi.means); summary(pi.means)
-hist(apply(pi.samples, 2, median), breaks = 20)
-summary(apply(pi.samples, 2, median))
+# model comparison table w/ loo, estimate, sd, n and reff 
 
-# Look at inidividaul large person random effects
-# Especially for people who always feel uncomfortable despite a large bike lane
-which(pi.means < -5 )
-filter(d, person_ID %in% c("21", "2149", "1587", "2060", "44")) %>% select(comfort_rating, NCHRP_BLOS_ST, bike_lane_SUM_ST, comfort_four_no_lane, video_name, VideoGroup, person_ID) %>%
-  arrange(person_ID)
-#weird that they all have the same videos?
+#on server
+#models_summary = lapply(models, summary)
+#models_loo = lapply(models, "[[", "loo")
 
-# Look at distributions of random effects when large
-length(which(abs(pi.means) > 3 ))
-pi.samples.melt = reshape2::melt(data.frame(pi.samples[,which(abs(pi.means) > 3 )]))
-pi.samples.melt$variable = factor(pi.samples.melt$variable,
-                                  levels = unique(pi.samples.melt$variable)[order(pi.means[which(abs(pi.means) > 3 )])])
-ggplot(data = pi.samples.melt) + 
-  ggridges::geom_density_ridges(aes(x = value, group = variable, y = variable))
+tmp = readRDS("summary_and_loo.RDS")
+models_summary = tmp$models_summary
+models_loo = tmp$models_loo
+rm(tmp)
 
+models_fixed = lapply(models_summary, "[[", "fixed")
+models_fixed = lapply(1:length(models_fixed), function(i) {
+  x = data.frame(models_fixed[[i]])
+  names(x) = paste0( names(models_fixed)[[i]], names(x))
+  x$term = rownames(x)
+  return(x)
+})
+
+lapply(models_summary, function(x) {x$fixed$Eff.Sample})
+
+models_table = plyr::join_all(models_fixed, type = "left", by = "term")
+rownames(models_table) = models_table$term

@@ -36,12 +36,12 @@ These files are listed in the order they would likely be used
   - counterfactual_building_blocks.RDS - hypothetical street/demographic/attitude scenarios
   - variable_name_dictionary.RDS - mapping (as a named vector) of model parameter names to readable names 
   
-#### Modeling notes
+#### Modeling notes from preliminary analysis
 
   - Notes from analysis in eda_comfort.R:
     - There is a lot of variation in street ratings in general. 
     - Rating distributions are more bimodal (bumps for high and low) than normal, and certain qualities (e.g. don't like biking) seem to flatten out the distribution rather than just moving the mean
-  - Notes from model_comfrort_jc.R
+  - Notes from model_comfort_jc.R
     - Preliminary ordered model (ord.prelim) and penalized ordered model (glmcr.prelim) have reasonable coefficient estimates.
     - Street features basically provide as much information as street id. (This may be because the features essentially reconstruct the names, though the signs of the coefficients make sense so probably not.) 
     - Some responders rated all videos the same, even when shown "between" blocks. (Strategy for them? Consider as outliers? Add random effects? I checked that we don't seem to need seperate distributions of random effects for between and within blocks.)

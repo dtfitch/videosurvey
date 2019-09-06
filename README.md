@@ -34,7 +34,7 @@ These files are listed in the order they would likely be used
 ### data
 
   - counterfactual_building_blocks.RDS - hypothetical street/demographic/attitude scenarios
-  - variable_name_dictionary.RDS - mapping (as a named vector) of model parameter names to readable names 
+  - variable_name_dictionary.RDS - mapping (as a named vector) of model parameter names to readable names. This is created in analysis_comfort_jc.R but may be useful in earlier scripts.
   
 #### Modeling notes from preliminary analysis
 

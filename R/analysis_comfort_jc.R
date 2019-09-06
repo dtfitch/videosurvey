@@ -94,13 +94,19 @@ varname_dict = tmp.rename.func(varname_dict, "person_ID", "person ID")
 varname_dict = tmp.rename.func(varname_dict, "video_name", "video name")
 
 #more we'll need below
-varname_dict2 = setNames(nm = c("ability_comfort", "road_environment", "id", "attitude"),
-                         c("biking comfort", "road environment", "id", "transit attitudes"))
+varname_dict2 = setNames(nm = c("ability_comfort", "road_environment", "id", "attitude",
+                                "b_Intercept\\[1\\]", "b_Intercept\\[2\\]", "b_Intercept\\[3\\]",
+                                "b_Intercept\\[4\\]", "b_Intercept\\[5\\]", "b_Intercept\\[6\\]",
+                                "sd_person_ID__Intercept", "sd_video_name__Intercept"),
+                         c("biking comfort", "road environment", "id", "transit attitudes",
+                            "Intercept 1 ", "Intercept 2", "Intercept 3",
+                           "Intercept 4", "Intercept 5", "Intercept 6",
+                           "SD person ID Intercept", "SD video name Intercept"))
 
 varname_dict = c(varname_dict, varname_dict2)
 rm(varname_dict2)
 
-saveRDS(varname_dict, file = "variable_name_dictionary.RDS")
+saveRDS(varname_dict, file = "../data/variable_name_dictionary.RDS")
 
 # 1. Model diagnostics and summary ----
     # 
@@ -139,13 +145,14 @@ saveRDS(varname_dict, file = "variable_name_dictionary.RDS")
 
     #density
     # I made a custom version of mcmc_ares_ridges in the mcmc_areas_ridges2.R file
-    # It uses a size argument to control the thickness of the lines in the density pltos
+    # It uses a "size" argument to control the thickness of the lines in the density plots
+    # "names" maps the parameter coefficient names to readable names
   source("mcmc_areas_ridges2.R")
 
 
-  mcmc_areas_ridges2(me_per_vid.array, 
+    mcmc_areas_ridges2(me_per_vid.array, 
                       pars = (dimnames(me_per_vid.array)$parameters[!grepl(dimnames(me_per_vid.array)$parameters,
-                      pattern = "person_ID|lp__|r_person|r_video")]), prob = .99, prob_outer = .99,
+                      pattern = "person_ID\\[|lp__|r_person|r_video")]), prob = .99, prob_outer = .99,
                      size = .1, names = varname_dict) + 
       geom_vline(aes(xintercept = 0))  + theme_bw() 
     
@@ -154,7 +161,7 @@ saveRDS(varname_dict, file = "variable_name_dictionary.RDS")
     
     mcmc_areas_ridges2(int_per_vid.array, 
                       pars = dimnames(int_per_vid.array)$parameters[!grepl(dimnames(int_per_vid.array)$parameters, 
-                      pattern = "person_ID|lp__|r_person|r_video")], prob = .99, prob_outer = .99,
+                      pattern = "person_ID\\[|lp__|r_person|r_video")], prob = .99, prob_outer = .99,
                       size = .1, names = varname_dict) + 
       geom_vline(aes(xintercept = 0)) + theme_bw()
     
@@ -163,7 +170,7 @@ saveRDS(varname_dict, file = "variable_name_dictionary.RDS")
     
     mcmc_areas_ridges2(me_per.array, 
                       pars = dimnames(me_per.array)$parameters[!grepl(dimnames(me_per.array)$parameters, 
-                       pattern = "person_ID|lp__|r_person|r_video")], prob = .99, prob_outer = .99,
+                       pattern = "person_ID\\[|lp__|r_person|r_video")], prob = .99, prob_outer = .99,
                       size = .1, names = varname_dict) + 
       geom_vline(aes(xintercept = 0)) + theme_bw()
     
@@ -172,7 +179,7 @@ saveRDS(varname_dict, file = "variable_name_dictionary.RDS")
     
     mcmc_areas_ridges2(int_per.array, 
                       pars = dimnames(int_per.array)$parameters[!grepl(dimnames(int_per.array)$parameters, 
-                       pattern = "person_ID|lp__|r_person|r_video")], prob = .99, prob_outer = .99,
+                       pattern = "person_ID\\[|lp__|r_person|r_video")], prob = .99, prob_outer = .99,
                       size = .1, names = varname_dict) + 
       geom_vline(aes(xintercept = 0)) + theme_bw()
   
@@ -395,7 +402,7 @@ building_blocks = list(attitudes = attitudes, ability_comfort = ability_comfort,
 
 sapply(building_blocks, function(x) {names(x) = varname_dict[names(x)]; x})
 
-saveRDS(building_blocks, file = "counterfactual_building_blocks.RDS")
+saveRDS(building_blocks, file = "../data/counterfactual_building_blocks.RDS")
 
     #       + Add interactions ----
 interaction.terms = trimws(strsplit(as.character(models$int_per$formula[[1]][3][1]), " \\+ ")[[1]])

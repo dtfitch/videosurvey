@@ -284,7 +284,7 @@ d %>% group_by(bike_lane_ST, op_like_biking_3lev) %>%
 
 # 4. Comparing ratings to "scores" ----
 
-d.scores = melt(d %>% select(matches("NCHRP|HCM|LTS|rating|video_name")) %>% mutate_if(is.ordered, as.numeric) %>%
+d.scores = melt(d %>% select(matches("NCHRP|HCM|LTS|_rating|video_name")) %>% mutate_if(is.ordered, as.numeric) %>%
                   select(-c("comfort_rating_3lev", "NCHRP_BLOS_score_ST")) %>%
                   mutate(NCHRP_BLOS_ST = 6 - NCHRP_BLOS_ST,
                          HCM_BLOS_ST = 6 - HCM_BLOS_ST),

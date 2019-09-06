@@ -418,7 +418,7 @@ d.model.street = d %>% select(matches("ST|comfort_rating", ignore.case = FALSE))
   select(-c("veh_volume_ST", "comfort_rating_3lev","NCHRP_BLOS_score_ST", #lower score -> A
             "prevailing_speed_mph_ST",
             #"speed_prevail_minus_limit_ST",
-            "speed_limit_mph_ST", # use prevailing speed here bc more efficient than these two speed vars, but we'll use speed categories in final models bc can be more consistently applied out of our sampel, better for planning purposes.
+            "speed_limit_mph_ST", # use prevailing speed here bc more efficient than these two speed vars, but we'll use speed categories in final models bc can be more consistently applied out of our sample, better for planning purposes.
             "bike_speed_mph_ST",
             "bike_lane_and_parking_lane_width_ft_ST",
             #"shoulder_width_ft_ST",

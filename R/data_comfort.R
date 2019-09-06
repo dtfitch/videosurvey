@@ -6,7 +6,7 @@
 # Data questions for Dillon;
 # 1. Why so many blank entries in the child fields? Why a few "Nones" in addition to zeros? 
 #   ans: free-entry fields
-# 2. Coding of hh_composition? Conflicting levels selected. Using rent_share as a hh composition type variable because it has least missing data nad is still somewhat discriptive of household type
+# 2. Coding of hh_composition? Conflicting levels selected. Using rent_share as a hh composition type variable because it has least missing data nad is still somewhat discriptive of household type. (This is probably due to students having multiple residences. I recoded best I could to a 4-level varibable.)
 # 3. Are blocked bike lanes really blocked? (https://youtu.be/LI0m8h3jVJ4, https://youtu.be/XAKiJ78Z8uE)
 #   ans: probably due to cropping down from longer variable, didn't use this variable -- only two streets potentially even blocked in longer video
 # 4. Are there errors in three-level vehicle volume variable? Seem to be

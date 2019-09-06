@@ -3,11 +3,11 @@ Analysis of factors influencing bicycling comfort based on UC Davis transportati
 
 Individuals were asked to watch 10-second clips of streets and rate their comfort bicycling on those streets. 
 
-### Jane's Notes
+# Jane's Notes
 
-# Files in the Repository
+## Files in the Repository
 
-## R 
+### R 
 
 These files are listed in the order they would likely be used
 
@@ -29,12 +29,13 @@ These files are listed in the order they would likely be used
   - model_loo.R - Code to add loo (leave-one-out cross validation metric) to fit models
   - analysis_comfort_jc.R	 - Code for model evaluation and prediction from models.
 
-## data
+### data
 
   - counterfactual_building_blocks.RDS - hypothetical street/demographic/attitude scenarios
   - variable_name_dictionary.RDS - mapping (as a named vector) of model parameter names to readable names 
   
-- Modeling notes 
+## Modeling notes
+
   - Preliminary ordered model (ord.prelim) and penalized ordered model (glmcr.prelim) have reasonable coefficient estimates.
   - Street features basically provide as much information as street id. (This may be because the features essentially reconstruct the names, though the signs of the coefficients make sense so probably not.) 
   - There is a lot of variation in street ratings in general. 

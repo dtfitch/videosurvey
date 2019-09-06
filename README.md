@@ -34,7 +34,7 @@ These files are listed in the order they would likely be used
   - counterfactual_building_blocks.RDS - hypothetical street/demographic/attitude scenarios
   - variable_name_dictionary.RDS - mapping (as a named vector) of model parameter names to readable names 
   
-### Modeling notes
+#### Modeling notes
 
   - Notes from analysis in eda_comfort.R:
     - There is a lot of variation in street ratings in general. 

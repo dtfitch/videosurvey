@@ -28,6 +28,8 @@ These files are listed in the order they would likely be used
     - me_per_vid_horse.R 
   - model_loo.R - Code to add loo (leave-one-out cross validation metric) to fit models
   - analysis_comfort_jc.R	 - Code for model evaluation and prediction from models.
+    - mcmc_areas_ridges2. This is called by analysis_comfort_jc.R and is an extrension of bayesplot::mcmc_areas_ridges that allows me to recode names with the varname_dict I supply (variable_name_dictionary.RDS) and to change the thickness of the density outline.
+
 
 ### data
 

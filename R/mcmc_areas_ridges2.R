@@ -35,7 +35,7 @@ mcmc_areas_ridges2 <- function (x, pars = character(), regex_pars = character(),
   else {
     geom_ignore()
   }
-  args_outer <- list(mapping = aes_(height = ~density), color = bayesplot:::get_color("dark"), 
+  args_outer <- list(mapping = aes_(height = ~density), color = "black",#bayesplot:::get_color("dark"), 
                      fill = NA, stat = "identity", size = .1)
   layer_outer <- do.call(ggridges::geom_density_ridges, args_outer)
   test_plot <- ggplot(datas$outer) + aes_(x = ~x, y = ~parameter) + 
@@ -52,9 +52,10 @@ mcmc_areas_ridges2 <- function (x, pars = character(), regex_pars = character(),
     this_par <- par_draw_order[par_num]
     next_pars <- par_draw_order[par_num < seq_along(par_draw_order)]
     this_par_data <- datas$inner %>% dplyr::filter(.data$parameter == 
-                                                     this_par) %>% mutate(color = bayesplot:::get_color("dark"), fill = bayesplot:::get_color("light"))
+                                                     this_par) %>% mutate(color = "black",#bayesplot:::get_color("dark"),
+                                                                          fill = "gray80")#bayesplot:::get_color("light"))
     next_par_data <- datas$outer %>% dplyr::filter(.data$parameter %in% 
-                                                     next_pars) %>% mutate(color = bayesplot:::get_color("dark"), 
+                                                     next_pars) %>% mutate(color = "black",#bayesplot:::get_color("dark"), 
                                                                            fill = bg)
     args_inner <- list(mapping = aes_(height = ~density,
                                       color = ~color, fill = ~fill),

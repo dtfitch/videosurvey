@@ -1,6 +1,4 @@
 # Update of analysis from the report or publication
-# current dir
-setwd("C:/Users/Dillon/Box Sync/_Projects/Video_CTS/Github/videosurvey/R/pub_analysis")
 ## Items to work on:
 
 (1) Outlier analysis: try slicing and repeated estimation a la (https://arxiv.org/pdf/1807.06068.pdf)
@@ -10,18 +8,18 @@ who tended to rate everything poorly despite claiming to be comfortable biking o
 That’s where I would start in deciding how to add complexity to the model. 
 
 INCOMPLETE: slice_analysis.R
-# results clearly show that people who always select neutral are poorly predicted.
-# This in turn biases predictions of neutral responses for people who select neutral
-# for less than all videos. People who don't vary their response but who select a
-# class other than neutral, don't seem to be problematic. In fact, people who always
-# select Very comfortable" are predicted quite well. I think this suggests that the
-# only people we have to worry about are the "always neutral" respondents
-# (n = 97 people or 485 responses or 3.2% of the data)
+results clearly show that people who always select neutral are poorly predicted.
+This in turn biases predictions of neutral responses for people who select neutral
+for less than all videos. People who don't vary their response but who select a
+class other than neutral, don't seem to be problematic. In fact, people who always
+select Very comfortable" are predicted quite well. I think this suggests that the
+only people we have to worry about are the "always neutral" respondents
+(n = 97 people or 485 responses or 3.2% of the data)
 
-# TO DO: repeat analysis after other model updates, make final decision on whether
-# to remove or retain "always neutral" respondents.
+TO DO: repeat analysis after other model updates, make final decision on whether
+to remove or retain "always neutral" respondents.
 
-# other slicing by person-level IVs show no issues
+other slicing by person-level IVs show no issues
 
 (2) Prior predictive checking
 Notes: prior predictive checks with N(0,5) for betas and t(3,0,5) for intercepts and sd showed exteme expectations
@@ -57,7 +55,9 @@ COMPLETE: Model 2
 
 RESULTS: ran adjacet category models (see Burkner and Vouve), one with no added parameters and one with category
 specific effects (allowed the varying intercepts by video_name to vary all thresholds, not just shift them). Both models
-performed much worse that the regular cumulative models. I'm happyd dropping and leaving this one undiscussed.
+performed much worse that the regular cumulative models. I'm happy dropping and leaving this one undiscussed.
+
+COMPLETE: Model 3 acat and acat with category specific thresholds
 
 (6) Monotonic predictions (lower priority)
 Notes: Before moving to brms I looked into whether the numeric variables should be treated as factors or numeric. 

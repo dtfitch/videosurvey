@@ -46,7 +46,7 @@ Try one person-level variable interacted with all street-level variables at a ti
 Predictions were improved when interacting age by road variables, and when interacting comfort_four_no_lane3
 by road variables. To reduce the number of interaction terms, I selected the terms from those interactions 
 that showed effects >|0.5|. These effects suggest that age or comfort moderate the road variable by enough to
-shift the prediction one class on average (Jane, pleaes check my evaluate_interactions.R and see if you agree with my decisions,
+shift the prediction one class on average (Jane, please check my evaluate_interactions.R and see if you agree with my decisions,
 also, if the calculated contrast is >|0.5| am I correct to say that on average the moderating effect would shift an answer response?
 
 COMPLETE: Model 2
@@ -65,5 +65,5 @@ I don’t remember exactly what I found but I guess I was satisfied that the inc
 or else binned them (e.g. with the speed limit variable). But with the added person and video effects it’s worth investigating again. 
 Still, just in the interest of not falling down a rabbit hole, I’d look for model misfit first. 
 
-RESULT: I decided not to pursue this one. So many moving parts in this study and I am happy with model 2. It allows us to discuss some 
+RESULT: I decided not to pursue this one. So many moving parts in this study and I am happy with model 2.
 

@@ -1,0 +1,43 @@
+order,pname,label
+1,b_Intercept[1],Intercept [1]
+2,b_Intercept[2],Intercept [2]
+3,b_Intercept[3],Intercept [3]
+4,b_Intercept[4],Intercept [4]
+5,b_Intercept[5],Intercept [5]
+6,b_Intercept[6],Intercept [6]
+7,sd_person_ID__Intercept,Std. dev. (Intercept by person)
+8,sd_video_name__Intercept,Std. dev. (Intercept by video)
+9,sd_video_name__VideoGroupWithin,Std. dev. (“Within” experimental group by video) 
+10,cor_video_name__Intercept__VideoGroupWithin,"Cor. (Intercept, “Within” experimental group by video)"
+11,b_female1,Woman (1/0)
+12,b_age,Age (z-score scaled to 0-1)
+13,b_child_u18TRUE,Child under 18 years old in household (1/0)
+14,b_usual_mode_4levBike,Bike is usual commute mode (1/0)
+15,b_VideoGroupWithin,“Within” experimental group (1/0)
+16,b_op_like_biking,I like riding a bike (ordered scaled to 0-1)
+17,b_op_need_car,I need a car to do many of the things I like to do (ordered scaled to 0-1)
+18,b_op_feel_safe,I feel safe bicycling on campus (ordered scaled to 0-1)
+19,b_op_like_transit,I like using public transit (ordered scaled to 0-1)
+20,b_op_arrive_professional,I need to dress professionally for my job (ordered scaled to 0-1)
+21,b_op_travel_stress,traveling to campus stresses me out (ordered scaled to 0-1)
+22,b_bike_ability,I am very confident riding a bike (1/0)
+23,b_comfort_four_no_lane2,Uncomfortable on mixed arterial but would ride there (1/0)
+24,b_comfort_four_no_lane3,Comfortable on mixed arterial (1/0)
+25,b_street_parking_ST1,On-street parking (1/0)
+26,b_outside_lane_width_ft_ST,Outside lane width (feet scaled to 0-1)
+27,b_veh_volume2_ST2,Moderate vehicle volume (1/0)
+28,b_veh_volume2_ST3,High vehicle volume (1/0)
+29,b_bike_operating_space_ST,Bike operating space (feet scaled to 0-1)
+30,b_speed_limit_mph_ST_3lev.30.40.,"Speed limit [30,40) mph (1/0)"
+31,b_speed_limit_mph_ST_3lev.40.50.,"Speed limit [40,50] mph (1/0)"
+32,b_bike_lane_SUM_ST1,Conventional bike lane (1/0)
+33,b_bike_lane_SUM_ST2,Buffered bike lane (1/0)
+34,b_speed_prevail_minus_limit_ST,Prevailing vehicle speed - speed limit (mph scaled to 0-1)
+35,b_veh_vol_non0_opspace_0_ST,Moderate or high vehicle volume with no bike operating space (1/0)
+36,b_age:bike_operating_space_ST,Age × Bike operating space
+37,b_age:speed_limit_mph_ST_3lev.40.50.,"Age × Speed limit [40,50] mph"
+38,b_age:speed_prevail_minus_limit_ST,Age × Prevailing vehicle speed - speed limit
+39,b_age:veh_vol_non0_opspace_0_ST,Age × Moderate or high vehicle volume with no bike operating space
+40,b_comfort_four_no_lane3:street_parking_ST1,Comfortable on mixed arterial × On-street parking
+41,b_comfort_four_no_lane3:outside_lane_width_ft_ST,Comfortable on mixed arterial × Outside lane width
+42,b_comfort_four_no_lane3:bike_operating_space_ST,Comfortable on mixed arterial × Bike operating space

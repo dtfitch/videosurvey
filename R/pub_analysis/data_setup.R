@@ -90,7 +90,7 @@ d.model = d %>% dplyr::select(-c("cts_ID", "ID", "URL",
   mutate(comfort_rating_ordered = d$comfort_rating)
 
 names(d.model)
-
+saveRDS(d.model,"./pub_analysis/data_for_models_nonscaled.RDS")
 
 
 d.remodel.me = d.model %>%

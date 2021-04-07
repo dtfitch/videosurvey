@@ -28,6 +28,8 @@ loo_compare(loos[[1]]$loo,loos[[2]]$loo,loos[[3]]$loo,loos[[4]]$loo,
             loos[[5]]$loo,loos[[6]]$loo,loos[[7]]$loo,loos[[8]]$loo,
             loos[[9]]$loo,loos[[10]]$loo)
 
+# write loo table
+write.csv(loo.comp,"./output/loos.csv")
 #RESULTS:
 # only age and comfort_four_no_lane3 interaction models show real prediction improvement
 # Move forward with selecting interaction terms from those models
